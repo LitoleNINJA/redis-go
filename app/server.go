@@ -68,7 +68,7 @@ func (info replicationInfo) infoResp() []byte {
 	buf.WriteString(l2 + "\r\n")
 	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
 	buf.WriteString(l3 + "\r\n")
-	resp := append([]byte(fmt.Sprintf("$%d\r\n", len(l1)+len(l2)+len(l3))+"\r\n"), buf.Bytes()...)
+	resp := append([]byte("$"+strconv.Itoa(len(l1)+len(l2)+len(l3))+"\r\n"), buf.Bytes()...)
 	fmt.Println("InfoResponse: ", string(resp))
 	return resp
 }
