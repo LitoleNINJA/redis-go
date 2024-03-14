@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Various RESP kinds
@@ -16,7 +18,14 @@ const (
 	Error   = '-'
 )
 
-var rdb = map[string]string{}
+// RedisDB is a simple in-memory key-value store
+type redisValue struct {
+	value     string
+	createdAt int64
+	expiry    int64
+}
+
+var rdb = map[string]redisValue{}
 
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -42,7 +51,7 @@ func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
 	for {
-		// buf := []byte("*3\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n")
+		// buf := []byte("*5\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n$2\r\npx\r\n$3\r\n100\r\n")
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -60,7 +69,17 @@ func handleCommand(conn net.Conn) {
 			res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
 		case "set":
 			res = []byte("+OK\r\n")
-			rdb[args[0]] = args[1]
+			var exp int64
+			if len(args) < 4 {
+				exp = 0
+			} else {
+				exp, _ = strconv.ParseInt(args[3], 10, 64)
+			}
+			rdb[args[0]] = redisValue{
+				value:     args[1],
+				createdAt: time.Now().UnixMilli(),
+				expiry:    exp,
+			}
 			fmt.Println("RDB: ", rdb)
 		case "get":
 			val, ok := rdb[args[0]]
@@ -69,7 +88,14 @@ func handleCommand(conn net.Conn) {
 				res = []byte("$-1\r\n")
 			} else {
 				fmt.Println("Value: ", val)
-				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+				timeElapsed := time.Now().UnixMilli() - val.createdAt
+				if val.expiry > 0 && timeElapsed > val.expiry {
+					fmt.Println("Key expired: ", args[0])
+					res = []byte("$-1\r\n")
+					delete(rdb, args[0])
+				} else {
+					res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val.value), val.value))
+				}
 			}
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
@@ -85,11 +111,13 @@ func handleCommand(conn net.Conn) {
 	}
 }
 
-// *3\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n
-// array, 3 elements
+// *5\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n$2\r\npx\r\n$3\r\n100\r\n
+// array, 4 elements
 // element 1 - bulk string, 3 chars "set"
 // element 2 - bulk string, 5 chars "grape"
 // element 3 - bulk string, 10 chars "strawberry
+// element 4 - bulk string, 2 chars "px"
+// element 5 - bulk string, 3 chars "100"
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	fmt.Printf("Array: %v Length: %v\n", a, len(a))
@@ -102,9 +130,9 @@ func parseCommand(buf string) (string, []string) {
 		switch a[i][0] {
 		case '$':
 			if cmd == "" {
-				cmd = a[i+1]
+				cmd = strings.ToLower(a[i+1])
 			} else {
-				args = append(args, a[i+1])
+				args = append(args, strings.ToLower(a[i+1]))
 			}
 		}
 	}
