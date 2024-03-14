@@ -7,6 +7,15 @@ import (
 	"strings"
 )
 
+// Various RESP kinds
+const (
+	Integer = ':'
+	String  = '+'
+	Bulk    = '$'
+	Array   = '*'
+	Error   = '-'
+)
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -45,7 +54,7 @@ func handleCommand(conn net.Conn) {
 		case "ping":
 			res = []byte("+PONG\r\n")
 		case "echo":
-			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg))
+			res = []byte(fmt.Sprintf("$%v\r\n%v\r\n", len(msg), msg))
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -56,17 +65,28 @@ func handleCommand(conn net.Conn) {
 			fmt.Println("Error writing to connection: ", err.Error())
 			return
 		}
-		fmt.Printf("Sent: %s", msg)
+		fmt.Printf("Sent: %s\n", res)
 	}
 }
 
+// *2\r\n$4\r\necho\r\n$3\r\nhey\r\n
+// array, 2 elements
+// element 1 - simple string, 4 chars "echo"
+// element 2 - simple string, 3 chars "hey"
 func parseCommand(buf string) (string, string) {
-	a := strings.Split(buf, " ")
-	cmd := strings.Trim(a[0], " \n")
-	if len(a) < 2 {
-		return cmd, ""
+	a := strings.Split(buf, "\\r\\n")
+
+	cmd, msg := "", ""
+	for i := 1; i < len(a); i++ {
+		switch a[i][0] {
+		case '$':
+			if cmd == "" {
+				cmd = a[i+1]
+			} else {
+				msg = a[i+1]
+			}
+		}
 	}
-	msg := strings.Trim(a[1], " \n")
 	fmt.Printf("Command: %s, Message: %s\n", cmd, msg)
 	return cmd, msg
 }
