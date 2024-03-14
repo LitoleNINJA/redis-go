@@ -31,7 +31,9 @@ type redisDB struct {
 }
 
 type replicationInfo struct {
-	role string
+	role               string
+	master_replid      string
+	master_repl_offset string
 }
 
 func (rdb redisDB) setValue(key string, value string, expiry int64) {
@@ -58,7 +60,7 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 }
 
 func (info replicationInfo) infoResp() []byte {
-	resp := []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n", len(info.role)+5, info.role))
+	resp := []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n$%d\r\nmaster_replid:%s\r\n$%d\r\nmaster_repl_offset:%s\r\n", len(info.role)+5, info.role, len(info.master_replid)+14, info.master_replid, len(info.master_repl_offset)+19, info.master_repl_offset))
 	fmt.Println("InfoResponse: ", string(resp))
 	return resp
 }
@@ -144,6 +146,8 @@ func handleCommand(conn net.Conn) {
 					role: "slave",
 				}
 			}
+			info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+			info.master_repl_offset = "0"
 			res = info.infoResp()
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
