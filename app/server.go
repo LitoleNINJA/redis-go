@@ -57,7 +57,9 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 }
 
 func (info replicationInfo) infoResp() []byte {
-	return []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n", len(info.role), info.role))
+	resp := []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n", len(info.role)+5, info.role))
+	fmt.Println("InfoResponse: ", string(resp))
+	return resp
 }
 
 var rdb = redisDB{
