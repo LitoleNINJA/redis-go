@@ -15,14 +15,21 @@ func main() {
 	defer l.Close()
 	fmt.Printf("Listening on %s\n", l.Addr().String())
 
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
 
+		go handlePing(conn)
+	}
+}
+
+func handlePing(conn net.Conn) {
+	defer conn.Close()
 	msg := []byte("+PONG\r\n")
-	_, err = conn.Write(msg)
+	_, err := conn.Write(msg)
 	if err != nil {
 		fmt.Println("Error writing to connection: ", err.Error())
 		os.Exit(1)
