@@ -36,7 +36,7 @@ func handlePing(conn net.Conn) {
 			fmt.Println("Error reading from connection: ", err.Error())
 			return
 		}
-		fmt.Printf("Received: %s", buf[:n])
+		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 		msg := []byte("+PONG\r\n")
 		_, err = conn.Write(msg)
 		if err != nil {
