@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -66,12 +67,18 @@ var rdb = redisDB{
 	data: make(map[string]redisValue),
 }
 
+var isReplica = false
+
 func main() {
-	port := "6379"
-	if len(os.Args) >= 2 {
-		port = os.Args[2]
+	port := flag.String("port", "6379", "Port to listen on")
+	isrep := flag.Bool("replicaof", false, "Start as a replica")
+	flag.Parse()
+
+	if *isrep {
+		isReplica = true
 	}
-	l, err := net.Listen("tcp", "0.0.0.0:"+port)
+
+	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
@@ -127,8 +134,15 @@ func handleCommand(conn net.Conn) {
 				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 			}
 		case "info":
-			info := replicationInfo{
-				role: "master",
+			var info replicationInfo
+			if !isReplica {
+				info = replicationInfo{
+					role: "master",
+				}
+			} else {
+				info = replicationInfo{
+					role: "slave",
+				}
 			}
 			res = info.infoResp()
 		default:
@@ -146,7 +160,7 @@ func handleCommand(conn net.Conn) {
 }
 
 func parseCommand(buf string) (string, []string) {
-	a := strings.Split(buf, "\r\n")
+	a := strings.Split(buf, "\\r\\n")
 	fmt.Printf("Array: %v Length: %v\n", a, len(a))
 	var cmd string
 	args := make([]string, 0)
