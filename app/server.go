@@ -22,11 +22,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handlePing(conn)
+		go handleCommand(conn)
 	}
 }
 
-func handlePing(conn net.Conn) {
+func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
 	for {
@@ -37,11 +37,23 @@ func handlePing(conn net.Conn) {
 			return
 		}
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
-		msg := []byte("+PONG\r\n")
+
+		cmd := string(buf[:n-1])
+		var msg []byte
+		switch cmd {
+		case "ping":
+			msg = []byte("+PONG\r\n")
+		case "echo":
+			msg = []byte("$3\r\nhey\r\n")
+		default:
+			fmt.Printf("Unknown command: %s\n", cmd)
+			return
+		}
+
 		_, err = conn.Write(msg)
 		if err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
-			os.Exit(1)
+			return
 		}
 		fmt.Printf("Sent: %s", msg)
 	}
