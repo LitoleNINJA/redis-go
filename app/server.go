@@ -25,7 +25,36 @@ type redisValue struct {
 	expiry    int64
 }
 
-var rdb = map[string]redisValue{}
+type redisDB struct {
+	data map[string]redisValue
+}
+
+func (rdb redisDB) setValue(key string, value string, expiry int64) {
+	rdb.data[key] = redisValue{
+		value:     value,
+		createdAt: time.Now().UnixMilli(),
+		expiry:    expiry,
+	}
+}
+
+func (rdb redisDB) getValue(key string) (string, bool) {
+	val, ok := rdb.data[key]
+	if !ok {
+		fmt.Println("Key not found: ", key)
+		return "", false
+	}
+	timeElapsed := time.Now().UnixMilli() - val.createdAt
+	if val.expiry > 0 && timeElapsed > val.expiry {
+		fmt.Println("Key expired: ", key)
+		delete(rdb.data, key)
+		return "", false
+	}
+	return val.value, true
+}
+
+var rdb = redisDB{
+	data: make(map[string]redisValue),
+}
 
 func main() {
 	port := "6379"
@@ -79,28 +108,16 @@ func handleCommand(conn net.Conn) {
 			} else {
 				exp, _ = strconv.ParseInt(args[3], 10, 64)
 			}
-			rdb[args[0]] = redisValue{
-				value:     args[1],
-				createdAt: time.Now().UnixMilli(),
-				expiry:    exp,
-			}
-			fmt.Println("RDB: ", rdb)
+			rdb.setValue(args[0], args[1], exp)
 		case "get":
-			val, ok := rdb[args[0]]
+			val, ok := rdb.getValue(args[0])
 			if !ok {
-				fmt.Println("Key not found: ", args[0])
 				res = []byte("$-1\r\n")
 			} else {
-				fmt.Println("Value: ", val)
-				timeElapsed := time.Now().UnixMilli() - val.createdAt
-				if val.expiry > 0 && timeElapsed > val.expiry {
-					fmt.Println("Key expired: ", args[0])
-					res = []byte("$-1\r\n")
-					delete(rdb, args[0])
-				} else {
-					res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val.value), val.value))
-				}
+				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 			}
+		case "info":
+			fmt.Println("Info command")
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
