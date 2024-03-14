@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -38,23 +39,34 @@ func handleCommand(conn net.Conn) {
 		}
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
-		cmd := string(buf[:n-1])
-		var msg []byte
+		cmd, msg := parseCommand(string(buf[:n]))
+		var res []byte
 		switch cmd {
 		case "ping":
-			msg = []byte("+PONG\r\n")
+			res = []byte("+PONG\r\n")
 		case "echo":
-			msg = []byte("$3\r\nhey\r\n")
+			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg))
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
 		}
 
-		_, err = conn.Write(msg)
+		_, err = conn.Write(res)
 		if err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			return
 		}
 		fmt.Printf("Sent: %s", msg)
 	}
+}
+
+func parseCommand(buf string) (string, string) {
+	a := strings.Split(buf, " ")
+	cmd := strings.Trim(a[0], " \n")
+	if len(a) < 2 {
+		return cmd, ""
+	}
+	msg := strings.Trim(a[1], " \n")
+	fmt.Printf("Command: %s, Message: %s\n", cmd, msg)
+	return cmd, msg
 }
