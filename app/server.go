@@ -54,7 +54,7 @@ func handleCommand(conn net.Conn) {
 		case "ping":
 			res = []byte("+PONG\r\n")
 		case "echo":
-			res = []byte(fmt.Sprintf("$%v\r\n%v\r\n", len(msg), msg))
+			res = []byte(fmt.Sprintf("+%s\r\n", msg))
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
