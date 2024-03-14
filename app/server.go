@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"net"
@@ -60,7 +61,14 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 }
 
 func (info replicationInfo) infoResp() []byte {
-	resp := []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n$%d\r\nmaster_replid:%s\r\n$%d\r\nmaster_repl_offset:%v\r\n", len(info.role)+5, info.role, len(info.master_replid)+14, info.master_replid, 20, info.master_repl_offset))
+	buf := bytes.Buffer{}
+	l1 := "role:" + info.role
+	buf.WriteString(l1 + "\r\n")
+	l2 := "master_replid:" + info.master_replid
+	buf.WriteString(l2 + "\r\n")
+	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
+	buf.WriteString(l3 + "\r\n")
+	resp := append([]byte(fmt.Sprintf("$%d\r\n", len(l1)+len(l2)+len(l3))+"\r\n"), buf.Bytes()...)
 	fmt.Println("InfoResponse: ", string(resp))
 	return resp
 }
@@ -69,16 +77,11 @@ var rdb = redisDB{
 	data: make(map[string]redisValue),
 }
 
-var isReplica = false
+var port = flag.String("port", "6379", "Port to listen on")
+var isReplica = flag.Bool("replicaof", false, "Start as a replica")
 
 func main() {
-	port := flag.String("port", "6379", "Port to listen on")
-	isrep := flag.Bool("replicaof", false, "Start as a replica")
 	flag.Parse()
-
-	if *isrep {
-		isReplica = true
-	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
 	if err != nil {
@@ -137,7 +140,7 @@ func handleCommand(conn net.Conn) {
 			}
 		case "info":
 			var info replicationInfo
-			if !isReplica {
+			if !*isReplica {
 				info = replicationInfo{
 					role: "master",
 				}
