@@ -12,9 +12,20 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	_, err = l.Accept()
+	defer l.Close()
+	fmt.Printf("Listening on %s\n", l.Addr().String())
+
+	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+
+	msg := []byte("+PONG\r\n")
+	_, err = conn.Write(msg)
+	if err != nil {
+		fmt.Println("Error writing to connection: ", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("Sent: %s", msg)
 }
