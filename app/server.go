@@ -28,11 +28,14 @@ func main() {
 
 func handlePing(conn net.Conn) {
 	defer conn.Close()
-	msg := []byte("+PONG\r\n")
-	_, err := conn.Write(msg)
-	if err != nil {
-		fmt.Println("Error writing to connection: ", err.Error())
-		os.Exit(1)
+
+	for {
+		msg := []byte("+PONG\r\n")
+		_, err := conn.Write(msg)
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Sent: %s", msg)
 	}
-	fmt.Printf("Sent: %s", msg)
 }
