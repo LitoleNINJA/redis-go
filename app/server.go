@@ -30,8 +30,15 @@ func handlePing(conn net.Conn) {
 	defer conn.Close()
 
 	for {
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from connection: ", err.Error())
+			return
+		}
+		fmt.Printf("Received: %s", buf[:n])
 		msg := []byte("+PONG\r\n")
-		_, err := conn.Write(msg)
+		_, err = conn.Write(msg)
 		if err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			os.Exit(1)
