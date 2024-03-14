@@ -62,8 +62,8 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 func (info replicationInfo) infoResp() []byte {
 	l1 := "role:" + info.role
 	l2 := "master_replid:" + info.master_replid
-	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
-	resp := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3))
+	l3 := "master_repl_offset:0"
+	resp := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3+"\r\n"))
 	fmt.Println("InfoResponse: ", string(resp))
 	return resp
 }
