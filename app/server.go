@@ -28,7 +28,11 @@ type redisValue struct {
 var rdb = map[string]redisValue{}
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	port := "6379"
+	if len(os.Args) >= 2 {
+		port = os.Args[2]
+	}
+	l, err := net.Listen("tcp", "0.0.0.0:"+port)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
@@ -111,13 +115,6 @@ func handleCommand(conn net.Conn) {
 	}
 }
 
-// *5\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n$2\r\npx\r\n$3\r\n100\r\n
-// array, 4 elements
-// element 1 - bulk string, 3 chars "set"
-// element 2 - bulk string, 5 chars "grape"
-// element 3 - bulk string, 10 chars "strawberry
-// element 4 - bulk string, 2 chars "px"
-// element 5 - bulk string, 3 chars "100"
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	fmt.Printf("Array: %v Length: %v\n", a, len(a))
