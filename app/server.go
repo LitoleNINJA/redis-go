@@ -18,15 +18,19 @@ const (
 	Error   = '-'
 )
 
-// RedisDB is a simple in-memory key-value store
 type redisValue struct {
 	value     string
 	createdAt int64
 	expiry    int64
 }
 
+// RedisDB is a simple in-memory key-value store
 type redisDB struct {
 	data map[string]redisValue
+}
+
+type replicationInfo struct {
+	role string
 }
 
 func (rdb redisDB) setValue(key string, value string, expiry int64) {
@@ -50,6 +54,10 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 		return "", false
 	}
 	return val.value, true
+}
+
+func (info replicationInfo) infoResp() []byte {
+	return []byte(fmt.Sprintf("$%d\r\nrole:%s\r\n", len(info.role), info.role))
 }
 
 var rdb = redisDB{
@@ -84,7 +92,7 @@ func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
 	for {
-		// buf := []byte("*5\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n$2\r\npx\r\n$3\r\n100\r\n")
+		// buf := []byte("*2\r\n$4\r\ninfo\r\n$11\r\nreplication\r\n")
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -117,7 +125,10 @@ func handleCommand(conn net.Conn) {
 				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 			}
 		case "info":
-			fmt.Println("Info command")
+			info := replicationInfo{
+				role: "master",
+			}
+			res = info.infoResp()
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -133,7 +144,7 @@ func handleCommand(conn net.Conn) {
 }
 
 func parseCommand(buf string) (string, []string) {
-	a := strings.Split(buf, "\r\n")
+	a := strings.Split(buf, "\\r\\n")
 	fmt.Printf("Array: %v Length: %v\n", a, len(a))
 	var cmd string
 	args := make([]string, 0)
