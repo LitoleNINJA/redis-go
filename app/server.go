@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"net"
@@ -61,14 +60,10 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 }
 
 func (info replicationInfo) infoResp() []byte {
-	buf := bytes.Buffer{}
 	l1 := "role:" + info.role
-	buf.WriteString(l1 + "\r\n")
 	l2 := "master_replid:" + info.master_replid
-	buf.WriteString(l2 + "\r\n")
 	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
-	buf.WriteString(l3 + "\r\n")
-	resp := append([]byte("$"+strconv.Itoa(len(l1)+len(l2)+len(l3))+"\r\n"), buf.Bytes()...)
+	resp := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3))
 	fmt.Println("InfoResponse: ", string(resp))
 	return resp
 }
