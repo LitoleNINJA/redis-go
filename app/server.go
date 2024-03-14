@@ -49,13 +49,13 @@ func handleCommand(conn net.Conn) {
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
 		// buf := []byte("*1\r\n$4\r\nping\r\n")
-		cmd, msg := parseCommand(string(buf[:]))
+		cmd, args := parseCommand(string(buf[:]))
 		var res []byte
 		switch cmd {
 		case "ping":
 			res = []byte("+PONG\r\n")
 		case "echo":
-			res = []byte(fmt.Sprintf("+%s\r\n", msg))
+			res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -74,10 +74,11 @@ func handleCommand(conn net.Conn) {
 // array, 2 elements
 // element 1 - simple string, 4 chars "echo"
 // element 2 - simple string, 3 chars "hey"
-func parseCommand(buf string) (string, string) {
+func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
-	fmt.Printf("Array: %s\n", a)
-	cmd, msg := "", ""
+	// fmt.Printf("Array: %s\n", a)
+	var cmd string
+	var args []string
 	for i := 1; i < len(a); i++ {
 		if len(a[i]) == 0 {
 			continue
@@ -87,10 +88,10 @@ func parseCommand(buf string) (string, string) {
 			if cmd == "" {
 				cmd = a[i+1]
 			} else {
-				msg = a[i+1]
+				args = append(args, a[i+1])
 			}
 		}
 	}
-	fmt.Printf("Command: %s, Message: %s\n", cmd, msg)
-	return cmd, msg
+	fmt.Printf("Command: %s, Args: %v\n", cmd, a)
+	return cmd, args
 }
