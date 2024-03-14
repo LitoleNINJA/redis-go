@@ -16,6 +16,8 @@ const (
 	Error   = '-'
 )
 
+var rdb = map[string]string{}
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -40,6 +42,7 @@ func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
 	for {
+		// buf := []byte("*3\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n")
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -48,7 +51,6 @@ func handleCommand(conn net.Conn) {
 		}
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
-		// buf := []byte("*1\r\n$4\r\nping\r\n")
 		cmd, args := parseCommand(string(buf[:]))
 		var res []byte
 		switch cmd {
@@ -56,6 +58,19 @@ func handleCommand(conn net.Conn) {
 			res = []byte("+PONG\r\n")
 		case "echo":
 			res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
+		case "set":
+			res = []byte("+OK\r\n")
+			rdb[args[0]] = args[1]
+			fmt.Println("RDB: ", rdb)
+		case "get":
+			val, ok := rdb[args[0]]
+			if !ok {
+				fmt.Println("Key not found: ", args[0])
+				res = []byte("$-1\r\n")
+			} else {
+				fmt.Println("Value: ", val)
+				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+			}
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -70,15 +85,16 @@ func handleCommand(conn net.Conn) {
 	}
 }
 
-// *2\r\n$4\r\necho\r\n$3\r\nhey\r\n
-// array, 2 elements
-// element 1 - simple string, 4 chars "echo"
-// element 2 - simple string, 3 chars "hey"
+// *3\r\n$3\r\nset\r\n$5\r\ngrape\r\n$10\r\nstrawberry\r\n
+// array, 3 elements
+// element 1 - bulk string, 3 chars "set"
+// element 2 - bulk string, 5 chars "grape"
+// element 3 - bulk string, 10 chars "strawberry
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
-	// fmt.Printf("Array: %s\n", a)
+	fmt.Printf("Array: %v Length: %v\n", a, len(a))
 	var cmd string
-	var args []string
+	args := make([]string, 0)
 	for i := 1; i < len(a); i++ {
 		if len(a[i]) == 0 {
 			continue
@@ -92,6 +108,6 @@ func parseCommand(buf string) (string, []string) {
 			}
 		}
 	}
-	fmt.Printf("Command: %s, Args: %v\n", cmd, a)
+	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
 	return cmd, args
 }
