@@ -48,7 +48,8 @@ func handleCommand(conn net.Conn) {
 		}
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
-		cmd, msg := parseCommand(string(buf[:n]))
+		// buf := []byte("*1\r\n$4\r\nping\r\n")
+		cmd, msg := parseCommand(string(buf[:]))
 		var res []byte
 		switch cmd {
 		case "ping":
@@ -74,10 +75,13 @@ func handleCommand(conn net.Conn) {
 // element 1 - simple string, 4 chars "echo"
 // element 2 - simple string, 3 chars "hey"
 func parseCommand(buf string) (string, string) {
-	a := strings.Split(buf, "\\r\\n")
-
+	a := strings.Split(buf, "\r\n")
+	fmt.Printf("Array: %s\n", a)
 	cmd, msg := "", ""
 	for i := 1; i < len(a); i++ {
+		if len(a[i]) == 0 {
+			continue
+		}
 		switch a[i][0] {
 		case '$':
 			if cmd == "" {
