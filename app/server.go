@@ -39,8 +39,8 @@ func main() {
 func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
+	buf := make([]byte, 1024)
 	for {
-		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
 			fmt.Println("Error reading from connection: ", err.Error())
@@ -74,7 +74,7 @@ func handleCommand(conn net.Conn) {
 // element 1 - simple string, 4 chars "echo"
 // element 2 - simple string, 3 chars "hey"
 func parseCommand(buf string) (string, string) {
-	a := strings.Split(buf, "\\r\\n")
+	a := strings.Split(buf, "\r\n")
 
 	cmd, msg := "", ""
 	for i := 1; i < len(a); i++ {
