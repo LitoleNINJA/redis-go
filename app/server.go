@@ -144,7 +144,7 @@ func handleCommand(conn net.Conn) {
 }
 
 func parseCommand(buf string) (string, []string) {
-	a := strings.Split(buf, "\\r\\n")
+	a := strings.Split(buf, "\r\n")
 	fmt.Printf("Array: %v Length: %v\n", a, len(a))
 	var cmd string
 	args := make([]string, 0)
