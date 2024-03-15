@@ -143,7 +143,7 @@ func handleCommand(conn net.Conn) {
 
 		cmd, args := parseCommand(string(buf[:]))
 		if cmd == "set" {
-			migrateToSlaves(string(buf[:]))
+			migrateToSlaves(buf)
 		}
 
 		var res []byte
@@ -327,11 +327,12 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 	return nil
 }
 
-func migrateToSlaves(cmd string) {
+func migrateToSlaves(cmd []byte) {
 	for _, conn := range replicas {
-		_, err := conn.Write([]byte(cmd))
+		_, err := conn.Write(cmd)
 		if err != nil {
 			fmt.Println("Error writing to replica: ", err.Error())
 		}
+		fmt.Printf("Sent: %s to %s\n", string(cmd), conn.RemoteAddr())
 	}
 }
