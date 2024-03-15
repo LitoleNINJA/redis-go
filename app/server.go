@@ -142,9 +142,6 @@ func handleCommand(conn net.Conn) {
 		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
 		cmd, args := parseCommand(string(buf[:]))
-		if cmd == "set" {
-			migrateToSlaves(buf)
-		}
 
 		var res []byte
 		switch cmd {
@@ -161,6 +158,7 @@ func handleCommand(conn net.Conn) {
 				exp, _ = strconv.ParseInt(args[3], 10, 64)
 			}
 			rdb.setValue(args[0], args[1], exp)
+			migrateToSlaves(args[0], args[1], exp)
 		case "get":
 			val, ok := rdb.getValue(args[0])
 			if !ok {
@@ -327,12 +325,13 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 	return nil
 }
 
-func migrateToSlaves(cmd []byte) {
+func migrateToSlaves(key, value string, exp int64) {
 	for _, conn := range replicas {
-		_, err := conn.Write(cmd)
+		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
+		_, err := conn.Write(res)
 		if err != nil {
 			fmt.Println("Error writing to replica: ", err.Error())
 		}
-		fmt.Printf("Sent: %s to %s\n", string(cmd), conn.RemoteAddr())
+		fmt.Printf("Sent Migration: %s to %s\n", string(res), conn.RemoteAddr())
 	}
 }

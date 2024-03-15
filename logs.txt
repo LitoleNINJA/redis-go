@@ -3,14 +3,14 @@
 [your_program] Listening on [::]:6379
 [replication-11] replica: $ redis-cli PING
 [replication-11] replica: Sent bytes: "*1\r\n$4\r\nPING\r\n"
-[replication-11] replica: Received RESP value: "PONG"
 [your_program] Received: *1
 [your_program] $4
 [your_program] PING
-[your_program]  From: [::1]:39018
+[your_program]  From: [::1]:48908
 [your_program] Command: ping, Args: []
 [your_program] Sent: +PONG
 [your_program] 
+[replication-11] replica: Received RESP value: "PONG"
 [replication-11] Received "PONG"
 [replication-11] replica: $ redis-cli REPLCONF listening-port 6380
 [replication-11] replica: Sent bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
@@ -22,7 +22,7 @@
 [your_program] listening-port
 [your_program] $4
 [your_program] 6380
-[your_program]  From: [::1]:39018
+[your_program]  From: [::1]:48908
 [your_program] Command: replconf, Args: [listening-port 6380]
 [your_program] Sent: +OK
 [your_program] 
@@ -37,7 +37,7 @@
 [your_program] capa
 [your_program] $6
 [your_program] psync2
-[your_program]  From: [::1]:39018
+[your_program]  From: [::1]:48908
 [your_program] Command: replconf, Args: [capa psync2]
 [your_program] Sent: +OK
 [your_program] 
@@ -54,7 +54,7 @@
 [your_program] ?
 [your_program] $2
 [your_program] -1
-[your_program]  From: [::1]:39018
+[your_program]  From: [::1]:48908
 [your_program] Command: psync, Args: [? -1]
 [your_program] Sent: $88
 [your_program] REDIS0011�	redis-ver7.2.0�
@@ -70,8 +70,16 @@
 [your_program] foo
 [your_program] $3
 [your_program] 123
-[your_program]  From: [::1]:39016
+[your_program]  From: [::1]:48900
 [your_program] Command: set, Args: [foo 123]
+[your_program] Sent: *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] foo
+[your_program] $3
+[your_program] 123
+[your_program]  to [::1]:48908
 [your_program] Sent: +OK
 [your_program] 
 [replication-11] Received "OK"
@@ -85,8 +93,16 @@
 [your_program] bar
 [your_program] $3
 [your_program] 456
-[your_program]  From: [::1]:39016
+[your_program]  From: [::1]:48900
 [your_program] Command: set, Args: [bar 456]
+[your_program] Sent: *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] bar
+[your_program] $3
+[your_program] 456
+[your_program]  to [::1]:48908
 [your_program] Sent: +OK
 [your_program] 
 [replication-11] Received "OK"
@@ -100,14 +116,22 @@
 [your_program] baz
 [your_program] $3
 [your_program] 789
-[your_program]  From: [::1]:39016
+[your_program]  From: [::1]:48900
 [your_program] Command: set, Args: [baz 789]
+[your_program] Sent: *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] baz
+[your_program] $3
+[your_program] 789
+[your_program]  to [::1]:48908
 [your_program] Sent: +OK
 [your_program] 
 [replication-11] Received "OK"
 [replication-11] replica: Received RESP value: ["SET", "foo", "123"]
 [replication-11] Received ["SET", "foo", "123"]
-[replication-11] replica: Received bytes:
+[replication-11] replica: Received bytes: "\x00"
 [replication-11] Received: "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 [replication-11]            ^ error
 [replication-11] Error: "\x00" is not a valid start of a RESP value (expected +, -, :, $ or *)
