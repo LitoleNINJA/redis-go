@@ -173,7 +173,7 @@ func handleCommand(conn net.Conn) {
 			}
 		case "psync":
 			if rdb.role == "master" {
-				res = []byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", args[0]))
+				res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
 			} else {
 				res = []byte("-ERR not a master\r\n")
 			}
@@ -301,7 +301,7 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
-		fmt.Println("Error Reading from master: ", err.Error())
+		fmt.Println("Error reading from master: ", err.Error())
 		return err
 	}
 	fmt.Printf("Received: %s\n", buf[:n])
