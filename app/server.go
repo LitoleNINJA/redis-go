@@ -301,7 +301,7 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
+		fmt.Println("Error Reading from master: ", err.Error())
 		return err
 	}
 	fmt.Printf("Received: %s\n", buf[:n])
