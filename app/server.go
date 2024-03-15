@@ -158,7 +158,7 @@ func handleCommand(conn net.Conn) {
 				exp, _ = strconv.ParseInt(args[3], 10, 64)
 			}
 			rdb.setValue(args[0], args[1], exp)
-			migrateToSlaves(args[0], args[1], exp)
+			migrateToSlaves(args[0], args[1])
 		case "get":
 			val, ok := rdb.getValue(args[0])
 			if !ok {
@@ -325,7 +325,7 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 	return nil
 }
 
-func migrateToSlaves(key, value string, exp int64) {
+func migrateToSlaves(key, value string) {
 	for _, conn := range replicas {
 		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
 		_, err := conn.Write(res)
