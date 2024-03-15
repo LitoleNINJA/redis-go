@@ -98,27 +98,11 @@ func main() {
 
 	if rdb.role == "slave" {
 		fmt.Printf("Replica of: %s:%s\n", masterIp, masterPort)
-		// ping master
-		conn, err := net.Dial("tcp", masterIp+":"+masterPort)
+		err := handleHandshake(masterIp, masterPort)
 		if err != nil {
-			fmt.Println("Error connecting to master: ", err.Error())
+			fmt.Println("Error during handshake: ", err.Error())
 			os.Exit(1)
 		}
-		defer conn.Close()
-
-		_, err = conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
-		if err != nil {
-			fmt.Println("Error writing to master: ", err.Error())
-			os.Exit(1)
-		}
-
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			fmt.Println("Error reading from master: ", err.Error())
-			os.Exit(1)
-		}
-		fmt.Printf("Received: %s\n", buf[:n])
 	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
@@ -181,6 +165,12 @@ func handleCommand(conn net.Conn) {
 			info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 			info.master_repl_offset = 0
 			res = info.infoResp()
+		case "replconf":
+			if rdb.role == "master" {
+				res = []byte("+OK\r\n")
+			} else {
+				res = []byte("-ERR not a master\r\n")
+			}
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -215,4 +205,74 @@ func parseCommand(buf string) (string, []string) {
 	}
 	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
 	return cmd, args
+}
+
+func handleHandshake(masterIp, masterPort string) error {
+	conn, err := net.Dial("tcp", masterIp+":"+masterPort)
+	if err != nil {
+		fmt.Println("Error connecting to master: ", err.Error())
+		return err
+	}
+	defer conn.Close()
+
+	err = pingMaster(conn)
+	if err != nil {
+		fmt.Println("Error pinging master: ", err.Error())
+		return err
+	}
+
+	err = sendREPLConf(conn, "listening-port", *port)
+	if err != nil {
+		fmt.Println("Error sending REPLCONF: ", err.Error())
+		return err
+	}
+	err = sendREPLConf(conn, "capa", "psync2")
+	if err != nil {
+		fmt.Println("Error sending REPLCONF: ", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func pingMaster(conn net.Conn) error {
+	// ping master
+	_, err := conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
+	if err != nil {
+		fmt.Println("Error writing to master: ", err.Error())
+		return err
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		return err
+	}
+	fmt.Printf("Received: %s\n", buf[:n])
+	if string(buf[:n]) != "+PONG\r\n" {
+		return fmt.Errorf("master did not respond with PONG: %s", string(buf[:n]))
+	}
+	return nil
+}
+
+func sendREPLConf(conn net.Conn, cmd, args string) error {
+	// REPLCONF to master
+	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(cmd), cmd, len(args), args)))
+	if err != nil {
+		fmt.Println("Error writing to master: ", err.Error())
+		return err
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		return err
+	}
+	fmt.Printf("Received: %s\n", buf[:n])
+	if string(buf[:n]) != "+OK\r\n" {
+		return fmt.Errorf("master did not respond with OK: %s", string(buf[:n]))
+	}
+	return nil
 }
