@@ -59,13 +59,22 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 	return val.value, true
 }
 
+// $103
+// $96
+// $85
+// role:master
+// master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb
+// master_repl_offset:0
 func (info replicationInfo) infoResp() []byte {
 	l1 := "role:" + info.role
 	l2 := "master_replid:" + info.master_replid
-	l3 := "master_repl_offset:0"
-	resp := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3+"\r\n"))
-	fmt.Println("InfoResponse: ", string(resp))
-	return resp
+	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
+	resp := fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3)
+	fmt.Println("InfoResponse: ", resp)
+
+	resp = fmt.Sprintf("$%d\r\n%s\r\n", len(resp), resp)
+	resp = fmt.Sprintf("$%d%s%s%s", len(resp), "\r\n", resp, "\r\n")
+	return []byte(resp)
 }
 
 var rdb = redisDB{
