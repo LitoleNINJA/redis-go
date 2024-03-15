@@ -19,15 +19,16 @@ const (
 	Error   = '-'
 )
 
+// RedisDB is a simple in-memory key-value store
+type redisDB struct {
+	data map[string]redisValue
+	role string
+}
+
 type redisValue struct {
 	value     string
 	createdAt int64
 	expiry    int64
-}
-
-// RedisDB is a simple in-memory key-value store
-type redisDB struct {
-	data map[string]redisValue
 }
 
 type replicationInfo struct {
@@ -59,12 +60,6 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 	return val.value, true
 }
 
-// $103
-// $96
-// $85
-// role:master
-// master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb
-// master_repl_offset:0
 func (info replicationInfo) infoResp() []byte {
 	l1 := "role:" + info.role
 	l2 := "master_replid:" + info.master_replid
@@ -79,13 +74,52 @@ func (info replicationInfo) infoResp() []byte {
 
 var rdb = redisDB{
 	data: make(map[string]redisValue),
+	role: "master",
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
-var isReplica = flag.Bool("replicaof", false, "Start as a replica")
+var isReplica = flag.String("replicaof", "", "Replica of")
 
 func main() {
+	var masterIp, masterPort string
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--replicaof" && i+2 < len(args) {
+			masterIp = args[i+1]
+			masterPort = args[i+2]
+			break
+		}
+	}
+
 	flag.Parse()
+	if *isReplica != "" {
+		rdb.role = "slave"
+	}
+
+	if rdb.role == "slave" {
+		fmt.Printf("Replica of: %s:%s\n", masterIp, masterPort)
+		// ping master
+		conn, err := net.Dial("tcp", masterIp+":"+masterPort)
+		if err != nil {
+			fmt.Println("Error connecting to master: ", err.Error())
+			os.Exit(1)
+		}
+		defer conn.Close()
+
+		_, err = conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
+		if err != nil {
+			fmt.Println("Error writing to master: ", err.Error())
+			os.Exit(1)
+		}
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from master: ", err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Received: %s\n", buf[:n])
+	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
 	if err != nil {
@@ -110,7 +144,6 @@ func handleCommand(conn net.Conn) {
 	defer conn.Close()
 
 	for {
-		// buf := []byte("*2\r\n$4\r\ninfo\r\n$11\r\nreplication\r\n")
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -144,15 +177,7 @@ func handleCommand(conn net.Conn) {
 			}
 		case "info":
 			var info replicationInfo
-			if !*isReplica {
-				info = replicationInfo{
-					role: "master",
-				}
-			} else {
-				info = replicationInfo{
-					role: "slave",
-				}
-			}
+			info.role = rdb.role
 			info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 			info.master_repl_offset = 0
 			res = info.infoResp()
