@@ -171,6 +171,12 @@ func handleCommand(conn net.Conn) {
 			} else {
 				res = []byte("-ERR not a master\r\n")
 			}
+		case "psync":
+			if rdb.role == "master" {
+				res = []byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", args[0]))
+			} else {
+				res = []byte("-ERR not a master\r\n")
+			}
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 			return
@@ -223,12 +229,18 @@ func handleHandshake(masterIp, masterPort string) error {
 
 	err = sendREPLConf(conn, "listening-port", *port)
 	if err != nil {
-		fmt.Println("Error sending REPLCONF: ", err.Error())
+		fmt.Println("Error sending REPLCONF 1: ", err.Error())
 		return err
 	}
 	err = sendREPLConf(conn, "capa", "psync2")
 	if err != nil {
-		fmt.Println("Error sending REPLCONF: ", err.Error())
+		fmt.Println("Error sending REPLCONF 2: ", err.Error())
+		return err
+	}
+
+	err = sendPSYNC(conn, "?", -1)
+	if err != nil {
+		fmt.Println("Error sending PSYNC: ", err.Error())
 		return err
 	}
 
@@ -274,5 +286,24 @@ func sendREPLConf(conn net.Conn, cmd, args string) error {
 	if string(buf[:n]) != "+OK\r\n" {
 		return fmt.Errorf("master did not respond with OK: %s", string(buf[:n]))
 	}
+	return nil
+}
+
+func sendPSYNC(conn net.Conn, replId string, offset int) error {
+	// PSYNC to master
+	offset_str := strconv.Itoa(offset)
+	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$5\r\nPSYNC\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(replId), replId, len(offset_str), offset_str)))
+	if err != nil {
+		fmt.Println("Error writing to master: ", err.Error())
+		return err
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		return err
+	}
+	fmt.Printf("Received: %s\n", buf[:n])
 	return nil
 }
