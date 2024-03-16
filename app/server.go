@@ -116,7 +116,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer l.Close()
-	fmt.Printf("Listening on %s\n", l.Addr().String())
+	fmt.Printf("%s Listening on %s\n", rdb.role, l.Addr().String())
 
 	for {
 		conn, err := l.Accept()
@@ -139,7 +139,7 @@ func handleCommand(conn net.Conn) {
 			fmt.Println("Error reading from connection: ", err.Error())
 			return
 		}
-		fmt.Printf("Received: %s From: %s\n", buf[:n], conn.RemoteAddr())
+		fmt.Printf("\nReceived: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
 		cmd, args := parseCommand(string(buf[:]))
 
