@@ -22,9 +22,10 @@ const (
 
 // RedisDB is a simple in-memory key-value store
 type redisDB struct {
-	data   map[string]redisValue
-	role   string
-	buffer [][]byte
+	data     map[string]redisValue
+	role     string
+	buffer   [][]byte
+	replicas map[string]net.Conn
 }
 
 type redisValue struct {
@@ -75,12 +76,11 @@ func (info replicationInfo) infoResp() []byte {
 }
 
 var rdb = redisDB{
-	data:   make(map[string]redisValue),
-	role:   "master",
-	buffer: make([][]byte, 0),
+	data:     make(map[string]redisValue),
+	role:     "master",
+	buffer:   make([][]byte, 0),
+	replicas: make(map[string]net.Conn),
 }
-
-var replicas = make(map[string]net.Conn)
 
 var port = flag.String("port", "6379", "Port to listen on")
 var isReplica = flag.String("replicaof", "", "Replica of")
@@ -190,7 +190,7 @@ func handleCommand(conn net.Conn) {
 				}
 				res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
 				// add slave to replicas
-				replicas[conn.RemoteAddr().String()] = conn
+				rdb.replicas[conn.RemoteAddr().String()] = conn
 			} else {
 				res = []byte("-ERR not a master\r\n")
 			}
@@ -326,7 +326,7 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 }
 
 func migrateToSlaves(key, value string) {
-	for _, conn := range replicas {
+	for _, conn := range rdb.replicas {
 		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
 		_, err := conn.Write(res)
 		if err != nil {
