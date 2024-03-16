@@ -204,7 +204,7 @@ func handleCommand(conn net.Conn) {
 				}
 			default:
 				fmt.Printf("Unknown command: %s\n", cmd)
-				return
+				res = []byte("-ERR unknown command\r\n")
 			}
 
 			_, err = conn.Write(res)
@@ -230,9 +230,9 @@ func addCommandToBuffer(buf string) {
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	// for local testing
-	// if len(a) == 1 {
-	// 	a = strings.Split(buf, "\\r\\n")
-	// }
+	if len(a) == 1 {
+		a = strings.Split(buf, "\\r\\n")
+	}
 	n, _ := strconv.ParseInt(a[0], 10, 64)
 
 	var cmd string

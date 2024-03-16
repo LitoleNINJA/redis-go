@@ -6,121 +6,32 @@
 [replication-13] ping received.
 [replication-13] +PONG sent.
 [replication-13] REPLCONF listening-port 6380 received.
-[your_program] Received: +PONG
-[your_program] 
 [replication-13] +OK sent.
-[your_program] Received: +OK
+[your_program] Received: +PONG
 [your_program] 
 [replication-13] REPLCONF capa psync2 received.
 [replication-13] +OK sent.
-[replication-13] PSYNC ? -1 received.
-[replication-13] +FULLRESYNC ibya1cqttj1yacdy580w8oe2k0brbyimpz01rlvx 0 sent.
-[replication-13] RDB file sent.
 [your_program] Received: +OK
 [your_program] 
+[your_program] Received: +OK
+[your_program] 
+[replication-13] PSYNC ? -1 received.
+[replication-13] +FULLRESYNC 0th75cnnlaoywsxm32ssl5ft3w7zt0r8n2wf802y 0 sent.
+[replication-13] RDB file sent.
+[your_program] Received: +FULLRESYNC 0th75cnnlaoywsxm32ssl5ft3w7zt0r8n2wf802y 0
+[your_program] 
+[your_program] 
+[your_program] Received: $88
+[your_program] REDIS0011�	redis-ver7.2.0�
+[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z� From: [::1]:6379
+[your_program] Buffer: [$88
+[your_program] REDIS0011�	redis-ver7.2.0�
+[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�] Length: 1
+[your_program] Command: , Args: []
+[your_program] Unknown command: 
 [replication-13] $ redis-cli SET foo 123
 [replication-13] $ redis-cli SET bar 456
-[replication-13] $ redis-cli SET baz 789
-[replication-13] Getting key foo
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 2/5)
-[replication-13] 
-[your_program] Received: +FULLRESYNC ibya1cqttj1yacdy580w8oe2k0brbyimpz01rlvx 0
-[your_program] $88
-[your_program] REDIS0011�	redis-ver7.2.0�
-[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�*3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] foo
-[your_program] $3
-[your_program] 123
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] bar
-[your_program] $3
-[your_program] 456
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] baz
-[your_program] $3
-[your_program] 789
-[your_program] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:36138
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:36138
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 3/5)
-[replication-13] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 4/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:36138
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 5/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:36138
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] resp: invalid syntax
+[replication-13] write tcp [::1]:6379->[::1]:51316: write: broken pipe
 [replication-13] Test failed
 [replication-13] Terminating program
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:36138
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
 [replication-13] Program terminated successfully
