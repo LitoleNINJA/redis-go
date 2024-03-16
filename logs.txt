@@ -107,7 +107,7 @@
 [your_program] $3
 [your_program] baz
 [your_program] $3
-[your_program] 789
+[your_program] 78
 [your_program]  2
 [your_program] $3
 [your_program] GET
