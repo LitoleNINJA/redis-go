@@ -131,7 +131,6 @@ func main() {
 
 func handleCommand(conn net.Conn) {
 	defer conn.Close()
-
 	for {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -163,10 +162,9 @@ func handleCommand(conn net.Conn) {
 				rdb.setValue(args[0], args[1], exp)
 				if rdb.role == "master" {
 					res = []byte("+OK\r\n")
-					go migrateToSlaves(args[0], args[1])
-				} else if rdb.role == "slave" {
+					migrateToSlaves(args[0], args[1])
+				} else {
 					fmt.Println("Slave received set command: ", args[0], args[1], exp)
-					return
 				}
 			case "get":
 				val, ok := rdb.getValue(args[0])
@@ -215,7 +213,6 @@ func handleCommand(conn net.Conn) {
 			}
 			fmt.Printf("Sent: %s\n", res)
 		}
-
 	}
 }
 
