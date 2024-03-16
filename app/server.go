@@ -154,7 +154,6 @@ func handleCommand(conn net.Conn) {
 			case "echo":
 				res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
 			case "set":
-				res = []byte("+OK\r\n")
 				var exp int64
 				if len(args) < 4 {
 					exp = 0
@@ -162,7 +161,13 @@ func handleCommand(conn net.Conn) {
 					exp, _ = strconv.ParseInt(args[3], 10, 64)
 				}
 				rdb.setValue(args[0], args[1], exp)
-				migrateToSlaves(args[0], args[1])
+				if rdb.role == "master" {
+					res = []byte("+OK\r\n")
+					go migrateToSlaves(args[0], args[1])
+				} else if rdb.role == "slave" {
+					fmt.Println("Slave received set command: ", args[0], args[1], exp)
+					return
+				}
 			case "get":
 				val, ok := rdb.getValue(args[0])
 				if !ok {
@@ -221,11 +226,15 @@ func addCommandToBuffer(buf string) {
 			rdb.buffer = append(rdb.buffer, a[i])
 		}
 	}
-	fmt.Printf("Buffer: %v :ength: %d\n", rdb.buffer, len(rdb.buffer))
+	// fmt.Printf("Buffer: %v :ength: %d\n", rdb.buffer, len(rdb.buffer))
 }
 
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
+	// for local testing
+	// if len(a) == 1 {
+	// 	a = strings.Split(buf, "\\r\\n")
+	// }
 	n, _ := strconv.ParseInt(a[0], 10, 64)
 
 	var cmd string
