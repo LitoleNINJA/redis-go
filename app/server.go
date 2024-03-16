@@ -95,19 +95,9 @@ func main() {
 			break
 		}
 	}
-
 	flag.Parse()
 	if *isReplica != "" {
 		rdb.role = "slave"
-	}
-
-	if rdb.role == "slave" {
-		fmt.Printf("Replica of: %s:%s\n", masterIp, masterPort)
-		err := handleHandshake(masterIp, masterPort)
-		if err != nil {
-			fmt.Println("Error during handshake: ", err.Error())
-			os.Exit(1)
-		}
 	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
@@ -117,6 +107,16 @@ func main() {
 	}
 	defer l.Close()
 	fmt.Printf("%s Listening on %s\n", rdb.role, l.Addr().String())
+
+	if rdb.role == "slave" {
+		fmt.Printf("Replica of: %s:%s\n", masterIp, masterPort)
+		conn, err := handleHandshake(masterIp, masterPort)
+		if err != nil {
+			fmt.Println("Error during handshake: ", err.Error())
+			os.Exit(1)
+		}
+		go handleCommand(conn)
+	}
 
 	for {
 		conn, err := l.Accept()
@@ -229,9 +229,9 @@ func addCommandToBuffer(buf string) {
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	// for local testing
-	if len(a) == 1 {
-		a = strings.Split(buf, "\\r\\n")
-	}
+	// if len(a) == 1 {
+	// 	a = strings.Split(buf, "\\r\\n")
+	// }
 	n, _ := strconv.ParseInt(a[0], 10, 64)
 
 	var cmd string
@@ -254,37 +254,37 @@ func parseCommand(buf string) (string, []string) {
 	return cmd, args
 }
 
-func handleHandshake(masterIp, masterPort string) error {
+func handleHandshake(masterIp, masterPort string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", masterIp+":"+masterPort)
 	if err != nil {
 		fmt.Println("Error connecting to master: ", err.Error())
-		return err
+		return nil, err
 	}
 
 	err = pingMaster(conn)
 	if err != nil {
 		fmt.Println("Error pinging master: ", err.Error())
-		return err
+		return nil, err
 	}
 
 	err = sendREPLConf(conn, "listening-port", *port)
 	if err != nil {
 		fmt.Println("Error sending REPLCONF 1: ", err.Error())
-		return err
+		return nil, err
 	}
 	err = sendREPLConf(conn, "capa", "psync2")
 	if err != nil {
 		fmt.Println("Error sending REPLCONF 2: ", err.Error())
-		return err
+		return nil, err
 	}
 
 	err = sendPSYNC(conn, "?", -1)
 	if err != nil {
 		fmt.Println("Error sending PSYNC: ", err.Error())
-		return err
+		return nil, err
 	}
 
-	return nil
+	return conn, nil
 }
 
 func pingMaster(conn net.Conn) error {
