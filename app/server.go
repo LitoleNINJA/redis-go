@@ -165,7 +165,7 @@ func handleCommand(conn net.Conn) {
 					migrateToSlaves(args[0], args[1])
 				} else {
 					fmt.Println("Slave received set command: ", args[0], args[1], exp)
-					return
+					res = []byte("")
 				}
 			case "get":
 				val, ok := rdb.getValue(args[0])
