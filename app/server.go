@@ -195,7 +195,7 @@ func handleCommand(conn net.Conn) {
 					emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 					emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
 					if err != nil {
-						fmt.Println("Error decoding empty RDB file: ", err.Error())
+						fmt.Println("Error decoding RDB file: ", err.Error())
 						return
 					}
 					res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
