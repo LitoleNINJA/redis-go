@@ -24,7 +24,7 @@ const (
 type redisDB struct {
 	data     map[string]redisValue
 	role     string
-	buffer   [][]byte
+	buffer   []string
 	replicas map[string]net.Conn
 }
 
@@ -78,7 +78,7 @@ func (info replicationInfo) infoResp() []byte {
 var rdb = redisDB{
 	data:     make(map[string]redisValue),
 	role:     "master",
-	buffer:   make([][]byte, 0),
+	buffer:   make([]string, 0),
 	replicas: make(map[string]net.Conn),
 }
 
@@ -141,77 +141,93 @@ func handleCommand(conn net.Conn) {
 		}
 		fmt.Printf("\nReceived: %s From: %s\n", buf[:n], conn.RemoteAddr())
 
-		cmd, args := parseCommand(string(buf[:]))
+		addCommandToBuffer(string(buf))
 
-		var res []byte
-		switch cmd {
-		case "ping":
-			res = []byte("+PONG\r\n")
-		case "echo":
-			res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
-		case "set":
-			res = []byte("+OK\r\n")
-			var exp int64
-			if len(args) < 4 {
-				exp = 0
-			} else {
-				exp, _ = strconv.ParseInt(args[3], 10, 64)
-			}
-			rdb.setValue(args[0], args[1], exp)
-			migrateToSlaves(args[0], args[1])
-		case "get":
-			val, ok := rdb.getValue(args[0])
-			if !ok {
-				res = []byte("$-1\r\n")
-			} else {
-				res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
-			}
-		case "info":
-			var info replicationInfo
-			info.role = rdb.role
-			info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-			info.master_repl_offset = 0
-			res = info.infoResp()
-		case "replconf":
-			if rdb.role == "master" {
+		for len(rdb.buffer) > 0 {
+			cmd, args := parseCommand(rdb.buffer[0])
+			rdb.buffer = rdb.buffer[1:]
+
+			var res []byte
+			switch cmd {
+			case "ping":
+				res = []byte("+PONG\r\n")
+			case "echo":
+				res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
+			case "set":
 				res = []byte("+OK\r\n")
-			} else {
-				res = []byte("-ERR not a master\r\n")
-			}
-		case "psync":
-			if rdb.role == "master" {
-				res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
-				conn.Write(res)
-				emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
-				emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
-				if err != nil {
-					fmt.Println("Error decoding empty RDB file: ", err.Error())
-					return
+				var exp int64
+				if len(args) < 4 {
+					exp = 0
+				} else {
+					exp, _ = strconv.ParseInt(args[3], 10, 64)
 				}
-				res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
-				// add slave to replicas
-				rdb.replicas[conn.RemoteAddr().String()] = conn
-			} else {
-				res = []byte("-ERR not a master\r\n")
+				rdb.setValue(args[0], args[1], exp)
+				migrateToSlaves(args[0], args[1])
+			case "get":
+				val, ok := rdb.getValue(args[0])
+				if !ok {
+					res = []byte("$-1\r\n")
+				} else {
+					res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+				}
+			case "info":
+				var info replicationInfo
+				info.role = rdb.role
+				info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+				info.master_repl_offset = 0
+				res = info.infoResp()
+			case "replconf":
+				if rdb.role == "master" {
+					res = []byte("+OK\r\n")
+				} else {
+					res = []byte("-ERR not a master\r\n")
+				}
+			case "psync":
+				if rdb.role == "master" {
+					res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
+					conn.Write(res)
+					emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+					emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
+					if err != nil {
+						fmt.Println("Error decoding empty RDB file: ", err.Error())
+						return
+					}
+					res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
+					// add slave to replicas
+					rdb.replicas[conn.RemoteAddr().String()] = conn
+				} else {
+					res = []byte("-ERR not a master\r\n")
+				}
+			default:
+				fmt.Printf("Unknown command: %s\n", cmd)
+				return
 			}
-		default:
-			fmt.Printf("Unknown command: %s\n", cmd)
-			return
+
+			_, err = conn.Write(res)
+			if err != nil {
+				fmt.Println("Error writing to connection: ", err.Error())
+				return
+			}
+			fmt.Printf("Sent: %s\n", res)
 		}
 
-		_, err = conn.Write(res)
-		if err != nil {
-			fmt.Println("Error writing to connection: ", err.Error())
-			return
-		}
-		fmt.Printf("Sent: %s\n", res)
 	}
+}
+
+func addCommandToBuffer(buf string) {
+	a := strings.Split(buf, "*")
+	for i := 0; i < len(a); i++ {
+		if len(a[i]) > 0 {
+			rdb.buffer = append(rdb.buffer, a[i])
+		}
+	}
+	fmt.Printf("Buffer: %v :ength: %d\n", rdb.buffer, len(rdb.buffer))
 }
 
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
-	// fmt.Printf("Array: %v Length: %v\n", a, len(a))
-	n, _ := strconv.ParseInt(a[0][1:], 10, 64)
+	n, _ := strconv.ParseInt(a[0], 10, 64)
+
 	var cmd string
 	args := make([]string, 0)
 	for i := 0; i < int(n); i++ {
