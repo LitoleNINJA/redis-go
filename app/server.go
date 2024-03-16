@@ -224,7 +224,7 @@ func addCommandToBuffer(buf string) {
 			rdb.buffer = append(rdb.buffer, a[i])
 		}
 	}
-	fmt.Printf("Buffer: %v Length: %d\n", rdb.buffer, len(rdb.buffer))
+	fmt.Printf("Buffer: %s", rdb.buffer)
 }
 
 func parseCommand(buf string) (string, []string) {

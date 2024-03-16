@@ -5,20 +5,25 @@
 [your_program] Replica of: localhost:6379
 [replication-13] ping received.
 [replication-13] +PONG sent.
+[your_program] Received: +PONG
+[your_program] 
 [replication-13] REPLCONF listening-port 6380 received.
 [replication-13] +OK sent.
-[your_program] Received: +PONG
+[your_program] Received: +OK
 [your_program] 
 [replication-13] REPLCONF capa psync2 received.
 [replication-13] +OK sent.
 [your_program] Received: +OK
 [your_program] 
-[your_program] Received: +OK
-[your_program] 
 [replication-13] PSYNC ? -1 received.
-[replication-13] +FULLRESYNC 0th75cnnlaoywsxm32ssl5ft3w7zt0r8n2wf802y 0 sent.
+[replication-13] +FULLRESYNC 7knz0lc5t4mw0pvgyq8ywc9mu36shb5z89hq4g8y 0 sent.
 [replication-13] RDB file sent.
-[your_program] Received: +FULLRESYNC 0th75cnnlaoywsxm32ssl5ft3w7zt0r8n2wf802y 0
+[replication-13] $ redis-cli SET foo 123
+[replication-13] $ redis-cli SET bar 456
+[replication-13] $ redis-cli SET baz 789
+[replication-13] Getting key foo
+[replication-13] $ redis-cli GET foo
+[your_program] Received: +FULLRESYNC 7knz0lc5t4mw0pvgyq8ywc9mu36shb5z89hq4g8y 0
 [your_program] 
 [your_program] 
 [your_program] Received: $88
@@ -29,9 +34,90 @@
 [your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�] Length: 1
 [your_program] Command: , Args: []
 [your_program] Unknown command: 
-[replication-13] $ redis-cli SET foo 123
-[replication-13] $ redis-cli SET bar 456
-[replication-13] write tcp [::1]:6379->[::1]:51316: write: broken pipe
+[your_program] Sent: -ERR unknown command
+[your_program] 
+[your_program] 
+[your_program] Received: *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] foo
+[your_program] $3
+[your_program] 123
+[your_program] *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] bar
+[your_program] $3
+[your_program] 456
+[your_program] *3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] baz
+[your_program] $3
+[your_program] 789
+[your_program]  From: [::1]:6379
+[your_program] Buffer: [3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] foo
+[your_program] $3
+[your_program] 123
+[your_program]  3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] bar
+[your_program] $3
+[your_program] 456
+[your_program]  3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] baz
+[your_program] $3
+[your_program] 789
+[your_program] ] Length: 3
+[your_program] Command: set, Args: [foo 123]
+[your_program] Slave received set command:  foo 123 0
+[your_program] Sent: 
+[your_program] Command: set, Args: [bar 456]
+[your_program] Slave received set command:  bar 456 0
+[your_program] 
+[your_program] Received: *2
+[your_program] $3
+[your_program] GET
+[your_program] $3
+[your_program] foo
+[your_program]  From: [::1]:44996
+[your_program] Sent: 
+[your_program] Command: set, Args: [baz 789]
+[your_program] Slave received set command:  baz 789 0
+[your_program] Sent: 
+[your_program] Command: get, Args: [foo]
+[your_program] Sent: $3
+[your_program] 123
+[your_program] 
+[your_program] Buffer: [3
+[your_program] $3
+[your_program] SET
+[your_program] $3
+[your_program] baz
+[your_program] $3
+[your_program] 789
+[your_program]  2
+[your_program] $3
+[your_program] GET
+[your_program] $3
+[your_program] foo
+[your_program] ] Length: 2
+[replication-13] timed out, test exceeded 10 seconds
 [replication-13] Test failed
 [replication-13] Terminating program
+[replication-13] 
+[replication-13] Assertion failed, retrying... (Attempt 2/5)
+[replication-13] 
 [replication-13] Program terminated successfully
