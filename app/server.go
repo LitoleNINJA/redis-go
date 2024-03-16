@@ -161,6 +161,7 @@ func handleCommand(conn net.Conn) {
 				}
 				rdb.setValue(args[0], args[1], exp)
 				if rdb.role == "master" {
+					fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
 					res = []byte("+OK\r\n")
 					migrateToSlaves(args[0], args[1])
 				} else {
@@ -223,7 +224,7 @@ func addCommandToBuffer(buf string) {
 			rdb.buffer = append(rdb.buffer, a[i])
 		}
 	}
-	// fmt.Printf("Buffer: %v :ength: %d\n", rdb.buffer, len(rdb.buffer))
+	fmt.Printf("Buffer: %v Length: %d\n", rdb.buffer, len(rdb.buffer))
 }
 
 func parseCommand(buf string) (string, []string) {

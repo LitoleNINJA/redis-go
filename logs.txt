@@ -5,16 +5,16 @@
 [your_program] Replica of: localhost:6379
 [replication-13] ping received.
 [replication-13] +PONG sent.
+[replication-13] REPLCONF listening-port 6380 received.
 [your_program] Received: +PONG
 [your_program] 
-[replication-13] REPLCONF listening-port 6380 received.
-[replication-13] +OK sent.
-[replication-13] REPLCONF capa psync2 received.
 [replication-13] +OK sent.
 [your_program] Received: +OK
 [your_program] 
+[replication-13] REPLCONF capa psync2 received.
+[replication-13] +OK sent.
 [replication-13] PSYNC ? -1 received.
-[replication-13] +FULLRESYNC 95bhwdmhyqblfqv1ydoraenowfxpq52eqrmqhyh6 0 sent.
+[replication-13] +FULLRESYNC ibya1cqttj1yacdy580w8oe2k0brbyimpz01rlvx 0 sent.
 [replication-13] RDB file sent.
 [your_program] Received: +OK
 [your_program] 
@@ -26,7 +26,7 @@
 [replication-13] 
 [replication-13] Assertion failed, retrying... (Attempt 2/5)
 [replication-13] 
-[your_program] Received: +FULLRESYNC 95bhwdmhyqblfqv1ydoraenowfxpq52eqrmqhyh6 0
+[your_program] Received: +FULLRESYNC ibya1cqttj1yacdy580w8oe2k0brbyimpz01rlvx 0
 [your_program] $88
 [your_program] REDIS0011�	redis-ver7.2.0�
 [your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�*3
@@ -57,7 +57,7 @@
 [your_program] GET
 [your_program] $3
 [your_program] foo
-[your_program]  From: [::1]:55716
+[your_program]  From: [::1]:36138
 [your_program] Command: get, Args: [foo]
 [your_program] Key not found:  foo
 [your_program] Sent: $-1
@@ -69,57 +69,57 @@
 [your_program] GET
 [your_program] $3
 [your_program] foo
-[your_program]  From: [::1]:55716
+[your_program]  From: [::1]:36138
 [your_program] Command: get, Args: [foo]
 [your_program] Key not found:  foo
+[your_program] Sent: $-1
+[your_program] 
 [replication-13] 
 [replication-13] Assertion failed, retrying... (Attempt 3/5)
 [replication-13] 
-[your_program] Sent: $-1
-[your_program] 
 [replication-13] $ redis-cli GET foo
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:55716
 [replication-13] 
 [replication-13] Assertion failed, retrying... (Attempt 4/5)
 [replication-13] 
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
 [your_program] 
 [your_program] Received: *2
 [your_program] $3
 [your_program] GET
 [your_program] $3
 [your_program] foo
-[your_program]  From: [::1]:55716
+[your_program]  From: [::1]:36138
 [your_program] Command: get, Args: [foo]
 [your_program] Key not found:  foo
+[your_program] Sent: $-1
+[your_program] 
+[replication-13] $ redis-cli GET foo
 [replication-13] 
 [replication-13] Assertion failed, retrying... (Attempt 5/5)
 [replication-13] 
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
 [your_program] 
 [your_program] Received: *2
 [your_program] $3
 [your_program] GET
 [your_program] $3
 [your_program] foo
-[your_program]  From: [::1]:55716
+[your_program]  From: [::1]:36138
 [your_program] Command: get, Args: [foo]
+[your_program] Key not found:  foo
+[your_program] Sent: $-1
+[your_program] 
+[replication-13] $ redis-cli GET foo
 [replication-13] 
 [replication-13] resp: invalid syntax
 [replication-13] Test failed
 [replication-13] Terminating program
+[your_program] 
+[your_program] Received: *2
+[your_program] $3
+[your_program] GET
+[your_program] $3
+[your_program] foo
+[your_program]  From: [::1]:36138
+[your_program] Command: get, Args: [foo]
 [your_program] Key not found:  foo
 [your_program] Sent: $-1
 [your_program] 
