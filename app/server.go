@@ -214,16 +214,17 @@ func parseCommand(buf string) (string, []string) {
 	n, _ := strconv.ParseInt(a[0][1:], 10, 64)
 	var cmd string
 	args := make([]string, 0)
-	for i := 1; i <= int(n); i++ {
+	for i := 0; i < int(n); i++ {
+		pos := 2*i + 1
 		if len(a[i]) == 0 {
 			continue
 		}
-		switch a[i][0] {
+		switch a[pos][0] {
 		case '$':
 			if cmd == "" {
-				cmd = strings.ToLower(a[i+1])
+				cmd = strings.ToLower(a[pos+1])
 			} else {
-				args = append(args, strings.ToLower(a[i+1]))
+				args = append(args, strings.ToLower(a[pos+1]))
 			}
 		}
 	}
