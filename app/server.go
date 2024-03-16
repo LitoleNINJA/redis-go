@@ -211,9 +211,10 @@ func handleCommand(conn net.Conn) {
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	// fmt.Printf("Array: %v Length: %v\n", a, len(a))
+	n, _ := strconv.ParseInt(a[0][1:], 10, 64)
 	var cmd string
 	args := make([]string, 0)
-	for i := 1; i < len(a); i++ {
+	for i := 1; i <= int(n); i++ {
 		if len(a[i]) == 0 {
 			continue
 		}
