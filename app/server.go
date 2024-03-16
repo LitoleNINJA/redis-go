@@ -232,9 +232,9 @@ func addCommandToBuffer(buf string) {
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	// for local testing
-	// if len(a) == 1 {
-	// 	a = strings.Split(buf, "\\r\\n")
-	// }
+	if len(a) == 1 {
+		a = strings.Split(buf, "\\r\\n")
+	}
 	n, _ := strconv.ParseInt(a[0], 10, 64)
 
 	var cmd string
@@ -263,7 +263,6 @@ func handleHandshake(masterIp, masterPort string) error {
 		fmt.Println("Error connecting to master: ", err.Error())
 		return err
 	}
-	defer conn.Close()
 
 	err = pingMaster(conn)
 	if err != nil {
