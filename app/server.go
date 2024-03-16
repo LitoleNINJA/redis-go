@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -166,6 +165,7 @@ func handleCommand(conn net.Conn) {
 					migrateToSlaves(args[0], args[1])
 				} else {
 					fmt.Println("Slave received set command: ", args[0], args[1], exp)
+					return
 				}
 			case "get":
 				val, ok := rdb.getValue(args[0])
@@ -184,11 +184,13 @@ func handleCommand(conn net.Conn) {
 				if rdb.role == "master" {
 					res = []byte("+OK\r\n")
 				} else {
-					res = []byte("-ERR not a master\r\n")
+					res = []byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n")
+					fmt.Println("Sending ACK to master")
 				}
 			case "psync":
 				if rdb.role == "master" {
 					res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
+					fmt.Printf("Sent: %s\n", res)
 					conn.Write(res)
 					emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 					emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
@@ -197,165 +199,35 @@ func handleCommand(conn net.Conn) {
 						return
 					}
 					res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
+					conn.Write(res)
+					fmt.Printf("Sent: %s\n", res)
+					res = []byte("")
+
 					// add slave to replicas
 					rdb.replicas[conn.RemoteAddr().String()] = conn
+
+					// ask for ack from slaves
+					getACK()
 				} else {
 					res = []byte("-ERR not a master\r\n")
 				}
 			default:
 				fmt.Printf("Unknown command: %s\n", cmd)
-				res = []byte("-ERR unknown command\r\n")
+				if rdb.role == "master" {
+					res = []byte("-ERR unknown command\r\n")
+				} else {
+					res = []byte("")
+				}
 			}
 
-			_, err = conn.Write(res)
-			if err != nil {
-				fmt.Println("Error writing to connection: ", err.Error())
-				return
-			}
-			fmt.Printf("Sent: %s\n", res)
-		}
-	}
-}
-
-func addCommandToBuffer(buf string) {
-	a := strings.Split(buf, "*")
-	for i := 0; i < len(a); i++ {
-		if len(a[i]) > 0 {
-			rdb.buffer = append(rdb.buffer, a[i])
-		}
-	}
-	fmt.Printf("Buffer: %s", rdb.buffer)
-}
-
-func parseCommand(buf string) (string, []string) {
-	a := strings.Split(buf, "\r\n")
-	// for local testing
-	if len(a) == 1 {
-		a = strings.Split(buf, "\\r\\n")
-	}
-	n, _ := strconv.ParseInt(a[0], 10, 64)
-
-	var cmd string
-	args := make([]string, 0)
-	for i := 0; i < int(n); i++ {
-		pos := 2*i + 1
-		if len(a[i]) == 0 {
-			continue
-		}
-		switch a[pos][0] {
-		case '$':
-			if cmd == "" {
-				cmd = strings.ToLower(a[pos+1])
-			} else {
-				args = append(args, strings.ToLower(a[pos+1]))
+			if len(res) > 0 {
+				_, err = conn.Write(res)
+				if err != nil {
+					fmt.Println("Error writing to connection: ", err.Error())
+					return
+				}
+				fmt.Printf("Sent: %s\n", res)
 			}
 		}
-	}
-	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
-	return cmd, args
-}
-
-func handleHandshake(masterIp, masterPort string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", masterIp+":"+masterPort)
-	if err != nil {
-		fmt.Println("Error connecting to master: ", err.Error())
-		return nil, err
-	}
-
-	err = pingMaster(conn)
-	if err != nil {
-		fmt.Println("Error pinging master: ", err.Error())
-		return nil, err
-	}
-
-	err = sendREPLConf(conn, "listening-port", *port)
-	if err != nil {
-		fmt.Println("Error sending REPLCONF 1: ", err.Error())
-		return nil, err
-	}
-	err = sendREPLConf(conn, "capa", "psync2")
-	if err != nil {
-		fmt.Println("Error sending REPLCONF 2: ", err.Error())
-		return nil, err
-	}
-
-	err = sendPSYNC(conn, "?", -1)
-	if err != nil {
-		fmt.Println("Error sending PSYNC: ", err.Error())
-		return nil, err
-	}
-
-	return conn, nil
-}
-
-func pingMaster(conn net.Conn) error {
-	// ping master
-	_, err := conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
-	if err != nil {
-		fmt.Println("Error writing to master: ", err.Error())
-		return err
-	}
-
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
-		return err
-	}
-	fmt.Printf("Received: %s\n", buf[:n])
-	if string(buf[:n]) != "+PONG\r\n" {
-		return fmt.Errorf("master did not respond with PONG: %s", string(buf[:n]))
-	}
-	return nil
-}
-
-func sendREPLConf(conn net.Conn, cmd, args string) error {
-	// REPLCONF to master
-	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(cmd), cmd, len(args), args)))
-	if err != nil {
-		fmt.Println("Error writing to master: ", err.Error())
-		return err
-	}
-
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
-		return err
-	}
-	fmt.Printf("Received: %s\n", buf[:n])
-	if string(buf[:n]) != "+OK\r\n" {
-		return fmt.Errorf("master did not respond with OK: %s", string(buf[:n]))
-	}
-	return nil
-}
-
-func sendPSYNC(conn net.Conn, replId string, offset int) error {
-	// PSYNC to master
-	offset_str := strconv.Itoa(offset)
-	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$5\r\nPSYNC\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(replId), replId, len(offset_str), offset_str)))
-	if err != nil {
-		fmt.Println("Error writing to master: ", err.Error())
-		return err
-	}
-
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
-		return err
-	}
-	fmt.Printf("Received: %s\n", buf[:n])
-	return nil
-}
-
-func migrateToSlaves(key, value string) {
-	for _, conn := range rdb.replicas {
-		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
-		_, err := conn.Write(res)
-		if err != nil {
-			fmt.Println("Error writing to replica: ", err.Error())
-		}
-		fmt.Printf("Sent Migration: %s to %s\n", string(res), conn.RemoteAddr())
 	}
 }
