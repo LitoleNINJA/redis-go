@@ -1,126 +1,74 @@
-[replication-13] Running tests for Replication > Stage #13: Command Processing
-[replication-13] Master is running on port 6379
-[replication-13] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
-[your_program] slave Listening on [::]:6380
-[your_program] Replica of: localhost:6379
-[replication-13] ping received.
-[replication-13] +PONG sent.
-[your_program] Received: +PONG
+[replication-11] Running tests for Replication > Stage #11: Single-replica propagation
+[replication-11] $ ./spawn_redis_server.sh --port 6379
+[your_program] master Listening on [::]:6379
+[replication-11] replica: $ redis-cli PING
+[replication-11] replica: Sent bytes: "*1\r\n$4\r\nPING\r\n"
+[replication-11] replica: Received RESP value: "PONG"
 [your_program] 
-[replication-13] REPLCONF listening-port 6380 received.
-[replication-13] +OK sent.
-[your_program] Received: +OK
+[your_program] Received: *1
+[your_program] $4
+[your_program] PING
+[your_program]  From: [::1]:46360
+[your_program] Command: ping, Args: []
+[your_program] Sent: +PONG
 [your_program] 
-[replication-13] REPLCONF capa psync2 received.
-[replication-13] +OK sent.
-[your_program] Received: +OK
-[replication-13] PSYNC ? -1 received.
+[replication-11] Received "PONG"
+[replication-11] replica: $ redis-cli REPLCONF listening-port 6380
+[replication-11] replica: Sent bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
+[replication-11] replica: Received RESP value: "OK"
 [your_program] 
-[replication-13] +FULLRESYNC o5keorb490k2qf1soo8z56ltqlc9t2hszfl7onct 0 sent.
-[replication-13] RDB file sent.
-[replication-13] $ redis-cli SET foo 123
-[replication-13] $ redis-cli SET bar 456
-[replication-13] $ redis-cli SET baz 789
-[replication-13] Getting key foo
-[replication-13] $ redis-cli GET foo
-[your_program] Received: +FULLRESYNC o5keorb490k2qf1soo8z56ltqlc9t2hszfl7onct 0
-[your_program] $88
+[your_program] Received: *3
+[your_program] $8
+[your_program] REPLCONF
+[your_program] $14
+[your_program] listening-port
+[your_program] $4
+[your_program] 6380
+[your_program]  From: [::1]:46360
+[your_program] Command: replconf, Args: [listening-port 6380]
+[your_program] Sent: +OK
+[your_program] 
+[replication-11] Received "OK"
+[replication-11] replica: $ redis-cli REPLCONF capa psync2
+[replication-11] replica: Sent bytes: "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
+[replication-11] replica: Received RESP value: "OK"
+[your_program] 
+[your_program] Received: *3
+[your_program] $8
+[your_program] REPLCONF
+[your_program] $4
+[your_program] capa
+[your_program] $6
+[your_program] psync2
+[your_program]  From: [::1]:46360
+[your_program] Command: replconf, Args: [capa psync2]
+[your_program] Sent: +OK
+[your_program] 
+[replication-11] Received "OK"
+[replication-11] replica: $ redis-cli PSYNC ? -1
+[replication-11] replica: Sent bytes: "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
+[replication-11] replica: Received RESP value: "FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0"
+[replication-11] Received "FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0"
+[replication-11] Reading RDB file...
+[your_program] 
+[your_program] Received: *3
+[your_program] $5
+[your_program] PSYNC
+[your_program] $1
+[your_program] ?
+[your_program] $2
+[your_program] -1
+[your_program]  From: [::1]:46360
+[your_program] Command: psync, Args: [? -1]
+[your_program] Sent: +FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0
+[your_program] 
+[your_program] Sent: $88
 [your_program] REDIS0011�	redis-ver7.2.0�
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 2/5)
-[replication-13] 
-[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�*3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] foo
-[your_program] $3
-[your_program] 123
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] bar
-[your_program] $3
-[your_program] 456
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] baz
-[your_program] $3
-[your_program] 789
+[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�
 [your_program] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:53462
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 3/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:53462
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 4/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:53462
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:53462
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 5/5)
-[replication-13] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[your_program] 
-[replication-13] resp: invalid syntax
-[replication-13] Test failed
-[replication-13] Terminating program
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:53462
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] Program terminated successfully
+[your_program] Get ACK from [::1]:46360
+[replication-11] Found extra data: "$88\r\nREDIS0011\xfa\tredis-ver\x057.2.0\xfa\nredis-bits\xc0@\xfa\x05ctime\xc2m\b\xbce\xfa\bused-mem°\xc4\x10\x00\xfa\baof-base\xc0\x00\xff\xf0n;\xfe\xc0\xffZ\xa2*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n"
+[replication-11] Test failed
+[replication-11] Terminating program
+[your_program] Error reading from connection:  EOF
+[replication-11] Program terminated successfully
