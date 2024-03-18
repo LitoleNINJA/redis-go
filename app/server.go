@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -21,11 +22,13 @@ const (
 
 // RedisDB is a simple in-memory key-value store
 type redisDB struct {
-	data           map[string]redisValue
-	role           string
-	buffer         []string
-	replicas       map[string]net.Conn
-	bytesProcessed int
+	data     map[string]redisValue
+	role     string
+	replID   string
+	mux      sync.Mutex
+	buffer   []string
+	replicas map[string]net.Conn
+	offset   int
 }
 
 type redisValue struct {
@@ -76,11 +79,13 @@ func (info replicationInfo) infoResp() []byte {
 }
 
 var rdb = redisDB{
-	data:           make(map[string]redisValue),
-	role:           "master",
-	buffer:         make([]string, 0),
-	replicas:       make(map[string]net.Conn),
-	bytesProcessed: 0,
+	data:     make(map[string]redisValue),
+	role:     "master",
+	replID:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+	mux:      sync.Mutex{},
+	buffer:   make([]string, 0),
+	replicas: make(map[string]net.Conn),
+	offset:   0,
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -163,7 +168,9 @@ func handleCommand(conn net.Conn) {
 				} else {
 					exp, _ = strconv.ParseInt(args[3], 10, 64)
 				}
+				rdb.mux.Lock()
 				rdb.setValue(args[0], args[1], exp)
+				rdb.mux.Unlock()
 				if rdb.role == "master" {
 					fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
 					res = []byte("+OK\r\n")
@@ -194,7 +201,7 @@ func handleCommand(conn net.Conn) {
 						res = []byte("+OK\r\n")
 					}
 				} else {
-					res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.bytesProcessed)), strconv.Itoa(rdb.bytesProcessed)))
+					res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.offset)), strconv.Itoa(rdb.offset)))
 					fmt.Println("Sending ACK to master")
 				}
 			case "psync":
@@ -217,7 +224,7 @@ func handleCommand(conn net.Conn) {
 					rdb.replicas[conn.RemoteAddr().String()] = conn
 
 					// ask for ack from slaves
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(1 * time.Second)
 					getACK()
 				} else {
 					res = []byte("-ERR not a master\r\n")
@@ -232,8 +239,8 @@ func handleCommand(conn net.Conn) {
 			}
 
 			if rdb.role == "slave" {
-				rdb.bytesProcessed = totalBytes
-				fmt.Printf("Bytes processed: %d\n", rdb.bytesProcessed)
+				rdb.offset = totalBytes
+				fmt.Printf("Bytes processed: %d\n", rdb.offset)
 			}
 			if len(res) > 0 {
 				_, err = conn.Write(res)
