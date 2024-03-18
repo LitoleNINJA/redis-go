@@ -217,7 +217,8 @@ func handleCommand(conn net.Conn) {
 					rdb.replicas[conn.RemoteAddr().String()] = conn
 
 					// ask for ack from slaves
-					// getACK()
+					time.Sleep(10 * time.Millisecond)
+					getACK()
 				} else {
 					res = []byte("-ERR not a master\r\n")
 				}
