@@ -15,7 +15,7 @@ func addCommandToBuffer(buf string) {
 			rdb.buffer = append(rdb.buffer, a[i])
 		}
 	}
-	fmt.Printf("Buffer: %s", rdb.buffer)
+	// fmt.Printf("Buffer: %s", rdb.buffer)
 }
 
 // parse command from buffer and return command and args

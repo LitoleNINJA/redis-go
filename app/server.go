@@ -21,10 +21,11 @@ const (
 
 // RedisDB is a simple in-memory key-value store
 type redisDB struct {
-	data     map[string]redisValue
-	role     string
-	buffer   []string
-	replicas map[string]net.Conn
+	data           map[string]redisValue
+	role           string
+	buffer         []string
+	replicas       map[string]net.Conn
+	bytesProcessed int
 }
 
 type redisValue struct {
@@ -75,10 +76,11 @@ func (info replicationInfo) infoResp() []byte {
 }
 
 var rdb = redisDB{
-	data:     make(map[string]redisValue),
-	role:     "master",
-	buffer:   make([]string, 0),
-	replicas: make(map[string]net.Conn),
+	data:           make(map[string]redisValue),
+	role:           "master",
+	buffer:         make([]string, 0),
+	replicas:       make(map[string]net.Conn),
+	bytesProcessed: 0,
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -130,6 +132,8 @@ func main() {
 
 func handleCommand(conn net.Conn) {
 	defer conn.Close()
+
+	totalBytes := 0
 	for {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -138,6 +142,7 @@ func handleCommand(conn net.Conn) {
 			return
 		}
 		fmt.Printf("\nReceived: %s From: %s\n", buf[:n], conn.RemoteAddr())
+		totalBytes += n
 
 		addCommandToBuffer(string(buf))
 
@@ -182,9 +187,14 @@ func handleCommand(conn net.Conn) {
 				res = info.infoResp()
 			case "replconf":
 				if rdb.role == "master" {
-					res = []byte("+OK\r\n")
+					if args[0] == "ack" {
+						fmt.Println("Received ACK from slave")
+						res = []byte("")
+					} else {
+						res = []byte("+OK\r\n")
+					}
 				} else {
-					res = []byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n")
+					res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.bytesProcessed)), strconv.Itoa(rdb.bytesProcessed)))
 					fmt.Println("Sending ACK to master")
 				}
 			case "psync":
@@ -221,6 +231,10 @@ func handleCommand(conn net.Conn) {
 				}
 			}
 
+			if rdb.role == "slave" {
+				rdb.bytesProcessed = totalBytes
+				fmt.Printf("Bytes processed: %d\n", rdb.bytesProcessed)
+			}
 			if len(res) > 0 {
 				_, err = conn.Write(res)
 				if err != nil {
