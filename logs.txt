@@ -1,131 +1,64 @@
-[replication-13] Running tests for Replication > Stage #13: Command Processing
-[replication-13] Master is running on port 6379
-[replication-13] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
+[replication-14] Running tests for Replication > Stage #14: ACKs with no commands
+[replication-14] Master is running on port 6379
+[replication-14] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
+[replication-14] ping received.
+[replication-14] +PONG sent.
 [your_program] slave Listening on [::]:6380
 [your_program] Replica of: localhost:6379
-[replication-13] ping received.
-[replication-13] +PONG sent.
 [your_program] Received: +PONG
 [your_program] 
-[replication-13] REPLCONF listening-port 6380 received.
-[replication-13] +OK sent.
+[replication-14] REPLCONF listening-port 6380 received.
+[replication-14] +OK sent.
 [your_program] Received: +OK
 [your_program] 
-[replication-13] REPLCONF capa psync2 received.
-[replication-13] +OK sent.
-[replication-13] PSYNC ? -1 received.
+[replication-14] REPLCONF capa psync2 received.
+[replication-14] +OK sent.
 [your_program] Received: +OK
 [your_program] 
-[replication-13] +FULLRESYNC 6x280qc2k3lboltskvjbcedbziedkf17hpc3qht5 0 sent.
-[replication-13] RDB file sent.
-[replication-13] $ redis-cli SET foo 123
-[replication-13] $ redis-cli SET bar 456
-[replication-13] $ redis-cli SET baz 789
-[replication-13] Getting key foo
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 2/5)
-[replication-13] 
-[your_program] Received: +FULLRESYNC 6x280qc2k3lboltskvjbcedbziedkf17hpc3qht5 0
-[your_program] $88
+[replication-14] PSYNC ? -1 received.
+[replication-14] +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0 sent.
+[replication-14] RDB file sent.
+[replication-14] $ redis-cli REPLCONF GETACK *
+[your_program] Received: +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0
+[your_program] 
+[your_program] 
+[your_program] Received: $88
 [your_program] REDIS0011�	redis-ver7.2.0�
 [your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�*3
+[your_program] $8
+[your_program] REPLCONF
+[your_program] $6
+[your_program] GETACK
+[your_program] $1
+[your_program] *
+[your_program]  From: [::1]:6379
+[your_program] Buffer: [$88
+[your_program] REDIS0011�	redis-ver7.2.0�
+[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z� 3
+[your_program] $8
+[your_program] REPLCONF
+[your_program] $6
+[your_program] GETACK
+[your_program] $1
+[your_program]  
+[your_program] ]Command: , Args: []
+[your_program] Unknown command: 
+[your_program] Bytes processed: 130
+[your_program] Command: replconf, Args: [getack ]
+[your_program] Sending ACK to master
+[your_program] Bytes processed: 130
+[your_program] Sent: *3
+[your_program] $8
+[your_program] REPLCONF
 [your_program] $3
-[your_program] SET
+[your_program] ACK
 [your_program] $3
-[your_program] foo
-[your_program] $3
-[your_program] 123
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] bar
-[your_program] $3
-[your_program] 456
-[your_program] *3
-[your_program] $3
-[your_program] SET
-[your_program] $3
-[your_program] baz
-[your_program] $3
-[your_program] 789
+[your_program] 130
 [your_program] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:44906
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Bytes processed: 22
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 3/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:44906
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Bytes processed: 44
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 4/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:44906
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Bytes processed: 66
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] Assertion failed, retrying... (Attempt 5/5)
-[replication-13] 
-[your_program] 
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:44906
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Bytes processed: 88
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] $ redis-cli GET foo
-[replication-13] 
-[replication-13] resp: invalid syntax
-[replication-13] Test failed
-[your_program] 
-[replication-13] Terminating program
-[your_program] Received: *2
-[your_program] $3
-[your_program] GET
-[your_program] $3
-[your_program] foo
-[your_program]  From: [::1]:44906
-[your_program] Command: get, Args: [foo]
-[your_program] Key not found:  foo
-[your_program] Bytes processed: 110
-[your_program] Sent: $-1
-[your_program] 
-[replication-13] Program terminated successfully
+[your_program] Command: , Args: []
+[your_program] Unknown command: 
+[your_program] Bytes processed: 130
+[replication-14] Expected: '0' and actual: '130' messages don't match
+[replication-14] Test failed
+[replication-14] Terminating program
+[replication-14] Program terminated successfully
