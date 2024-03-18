@@ -25,7 +25,7 @@ type redisDB struct {
 	data     map[string]redisValue
 	role     string
 	replID   string
-	mux      sync.Mutex
+	mux      *sync.Mutex
 	buffer   []string
 	replicas map[string]net.Conn
 	offset   int
@@ -82,7 +82,7 @@ var rdb = redisDB{
 	data:     make(map[string]redisValue),
 	role:     "master",
 	replID:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-	mux:      sync.Mutex{},
+	mux:      &sync.Mutex{},
 	buffer:   make([]string, 0),
 	replicas: make(map[string]net.Conn),
 	offset:   0,
@@ -121,7 +121,7 @@ func main() {
 			fmt.Println("Error during handshake: ", err.Error())
 			os.Exit(1)
 		}
-		go handleCommand(conn)
+		go handleConnection(conn)
 	}
 
 	for {
@@ -131,11 +131,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleCommand(conn)
+		go handleConnection(conn)
 	}
 }
 
-func handleCommand(conn net.Conn) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	totalBytes := 0
@@ -155,93 +155,8 @@ func handleCommand(conn net.Conn) {
 			cmd, args := parseCommand(rdb.buffer[0])
 			rdb.buffer = rdb.buffer[1:]
 
-			var res []byte
-			switch cmd {
-			case "ping":
-				res = []byte("+PONG\r\n")
-			case "echo":
-				res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
-			case "set":
-				var exp int64
-				if len(args) < 4 {
-					exp = 0
-				} else {
-					exp, _ = strconv.ParseInt(args[3], 10, 64)
-				}
-				rdb.mux.Lock()
-				rdb.setValue(args[0], args[1], exp)
-				rdb.mux.Unlock()
-				if rdb.role == "master" {
-					fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
-					res = []byte("+OK\r\n")
-					migrateToSlaves(args[0], args[1])
-				} else {
-					fmt.Println("Slave received set command: ", args[0], args[1], exp)
-					res = []byte("")
-				}
-			case "get":
-				val, ok := rdb.getValue(args[0])
-				if !ok {
-					res = []byte("$-1\r\n")
-				} else {
-					res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
-				}
-			case "info":
-				var info replicationInfo
-				info.role = rdb.role
-				info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-				info.master_repl_offset = 0
-				res = info.infoResp()
-			case "replconf":
-				if rdb.role == "master" {
-					if args[0] == "ack" {
-						fmt.Println("Received ACK from slave")
-						res = []byte("")
-					} else {
-						res = []byte("+OK\r\n")
-					}
-				} else {
-					res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.offset)), strconv.Itoa(rdb.offset)))
-					fmt.Println("Sending ACK to master")
-				}
-			case "psync":
-				if rdb.role == "master" {
-					res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
-					fmt.Printf("Sent: %s\n", res)
-					conn.Write(res)
-					emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
-					emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
-					if err != nil {
-						fmt.Println("Error decoding RDB file: ", err.Error())
-						return
-					}
-					res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
-					conn.Write(res)
-					fmt.Printf("Sent: %s\n", res)
-					res = []byte("")
+			res := handleCommand(cmd, args, conn, totalBytes)
 
-					// add slave to replicas
-					rdb.replicas[conn.RemoteAddr().String()] = conn
-
-					// ask for ack from slaves
-					time.Sleep(1 * time.Second)
-					getACK()
-				} else {
-					res = []byte("-ERR not a master\r\n")
-				}
-			default:
-				fmt.Printf("Unknown command: %s\n", cmd)
-				if rdb.role == "master" {
-					res = []byte("-ERR unknown command\r\n")
-				} else {
-					res = []byte("")
-				}
-			}
-
-			if rdb.role == "slave" {
-				rdb.offset = totalBytes
-				fmt.Printf("Bytes processed: %d\n", rdb.offset)
-			}
 			if len(res) > 0 {
 				_, err = conn.Write(res)
 				if err != nil {
@@ -252,4 +167,96 @@ func handleCommand(conn net.Conn) {
 			}
 		}
 	}
+}
+
+func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []byte {
+	var res []byte
+	switch cmd {
+	case "ping":
+		res = []byte("+PONG\r\n")
+	case "echo":
+		res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
+	case "set":
+		var exp int64
+		if len(args) < 4 {
+			exp = 0
+		} else {
+			exp, _ = strconv.ParseInt(args[3], 10, 64)
+		}
+		rdb.mux.Lock()
+		rdb.setValue(args[0], args[1], exp)
+		rdb.mux.Unlock()
+		if rdb.role == "master" {
+			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
+			res = []byte("+OK\r\n")
+			migrateToSlaves(args[0], args[1])
+		} else {
+			fmt.Println("Slave received set command: ", args[0], args[1], exp)
+			res = []byte("")
+		}
+	case "get":
+		val, ok := rdb.getValue(args[0])
+		if !ok {
+			res = []byte("$-1\r\n")
+		} else {
+			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+		}
+	case "info":
+		var info replicationInfo
+		info.role = rdb.role
+		info.master_replid = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+		info.master_repl_offset = 0
+		res = info.infoResp()
+	case "replconf":
+		if rdb.role == "master" {
+			if args[0] == "ack" {
+				fmt.Println("Received ACK from slave")
+				return []byte("")
+			} else {
+				res = []byte("+OK\r\n")
+			}
+		} else {
+			res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.offset)), strconv.Itoa(rdb.offset)))
+			fmt.Println("Sending ACK to master")
+		}
+	case "psync":
+		if rdb.role == "master" {
+			res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
+			fmt.Printf("Sent: %s\n", res)
+			conn.Write(res)
+			emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+			emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
+			if err != nil {
+				fmt.Println("Error decoding RDB file: ", err.Error())
+				return []byte("")
+			}
+			res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
+			conn.Write(res)
+			fmt.Printf("Sent: %s\n", res)
+			res = []byte("")
+
+			// add slave to replicas
+			rdb.replicas[conn.RemoteAddr().String()] = conn
+
+			// ask for ack from slaves
+			time.Sleep(1 * time.Second)
+			getACK()
+		} else {
+			res = []byte("-ERR not a master\r\n")
+		}
+	default:
+		fmt.Printf("Unknown command: %s\n", cmd)
+		if rdb.role == "master" {
+			res = []byte("-ERR unknown command\r\n")
+		} else {
+			res = []byte("")
+		}
+	}
+
+	if rdb.role == "slave" {
+		rdb.offset = totalBytes
+		fmt.Printf("Bytes processed: %d\n", rdb.offset)
+	}
+
+	return res
 }
