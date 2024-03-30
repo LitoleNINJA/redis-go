@@ -197,7 +197,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	case "get":
 		val, ok := rdb.getValue(args[0])
 		if !ok {
-			return []byte("")
+			res = []byte("")
 		} else {
 			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
 		}
