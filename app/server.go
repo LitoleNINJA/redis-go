@@ -51,19 +51,19 @@ func (rdb redisDB) setValue(key string, value string, expiry int64) {
 	}
 }
 
-func (rdb redisDB) getValue(key string) string {
+func (rdb redisDB) getValue(key string) (string, bool) {
 	val, ok := rdb.data[key]
 	if !ok {
 		fmt.Println("Key not found: ", key)
-		return ""
+		return "", false
 	}
 	timeElapsed := time.Now().UnixMilli() - val.createdAt
 	if val.expiry > 0 && timeElapsed > val.expiry {
 		fmt.Println("Key expired: ", key)
 		delete(rdb.data, key)
-		return "$-1\r\n"
+		return "$-1\r\n", false
 	}
-	return val.value
+	return val.value, true
 }
 
 func (info replicationInfo) infoResp() []byte {
@@ -195,8 +195,12 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte("")
 		}
 	case "get":
-		val := rdb.getValue(args[0])
-		res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+		val, ok := rdb.getValue(args[0])
+		if !ok {
+			res = []byte(val)
+		} else {
+			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+		}
 	case "info":
 		var info replicationInfo
 		info.role = rdb.role
