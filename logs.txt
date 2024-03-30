@@ -17,7 +17,7 @@
 [your_program] 
 [replication-14] PSYNC ? -1 received.
 [replication-14] +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0 sent.
-[replication-14] RDB file sent.
+[replication-14] RDB file sent
 [replication-14] $ redis-cli REPLCONF GETACK *
 [your_program] Received: +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0
 [your_program] 
