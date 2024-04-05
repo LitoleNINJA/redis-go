@@ -239,10 +239,17 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			rdb.replicas[conn.RemoteAddr().String()] = conn
 
 			// ask for ack from slaves
-			// time.Sleep(1 * time.Second)
 			getACK()
 		} else {
 			res = []byte("-ERR not a master\r\n")
+		}
+
+	case "type":
+		_, ok := rdb.getValue(args[0])
+		if !ok {
+			res = []byte(fmt.Sprintf("+%s\r\n", "none"))
+		} else {
+			res = []byte(fmt.Sprintf("+%s\r\n", "string"))
 		}
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
