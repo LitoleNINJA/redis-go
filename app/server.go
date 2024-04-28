@@ -131,7 +131,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			go handleConnection(conn)
+			handleConnection(conn)
 		}
 	}
 }
@@ -139,7 +139,6 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	totalBytes := 0
 	for {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -148,7 +147,6 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
-		totalBytes = n
 
 		addCommandToBuffer(string(buf))
 
@@ -156,7 +154,8 @@ func handleConnection(conn net.Conn) {
 			cmd, args := parseCommand(rdb.buffer[0])
 			rdb.buffer = rdb.buffer[1:]
 
-			res := handleCommand(cmd, args, conn, totalBytes)
+			res := handleCommand(cmd, args, conn, len(rdb.buffer[0]))
+			fmt.Printf("Cmd: %s, Bytes: %d\n", cmd, len(rdb.buffer[0]))
 
 			if len(res) > 0 {
 				_, err = conn.Write(res)
@@ -174,7 +173,11 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	var res []byte
 	switch cmd {
 	case "ping":
-		res = []byte("+PONG\r\n")
+		if rdb.role == "master" {
+			res = []byte("+PONG\r\n")
+		} else {
+			res = []byte("")
+		}
 	case "echo":
 		res = []byte(fmt.Sprintf("+%s\r\n", args[0]))
 	case "set":
@@ -241,7 +244,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			rdb.replicas[conn.RemoteAddr().String()] = conn
 
 			// ask for ack from slaves
-			time.Sleep(1 * time.Second)
 			getACK()
 		} else {
 			res = []byte("-ERR not a master\r\n")
@@ -262,9 +264,9 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		}
 	}
 
-	if rdb.role == "slave" && handshakeComplete {
+	if rdb.role == "slave" && handshakeComplete && len(res) > 0 {
 		rdb.offset += totalBytes
-		fmt.Printf("\nCurrent Bytes: %d,  Bytes processed: %d\n", totalBytes, rdb.offset)
+		fmt.Printf("\nCmd: %s,  Current Bytes: %d,  Bytes processed: %d\n", cmd, totalBytes, rdb.offset)
 	}
 
 	return res
