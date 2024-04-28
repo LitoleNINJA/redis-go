@@ -121,17 +121,17 @@ func main() {
 			fmt.Println("Error during handshake: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConnection(conn)
-	}
+		handleConnection(conn)
+	} else {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				fmt.Println("Error accepting connection: ", err.Error())
+				os.Exit(1)
+			}
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
+			handleConnection(conn)
 		}
-
-		go handleConnection(conn)
 	}
 }
 
@@ -147,7 +147,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
-		totalBytes += n
+		totalBytes = n
 
 		addCommandToBuffer(string(buf))
 
@@ -239,7 +239,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			rdb.replicas[conn.RemoteAddr().String()] = conn
 
 			// ask for ack from slaves
-			time.Sleep(1 * time.Second)
 			getACK()
 		} else {
 			res = []byte("-ERR not a master\r\n")
@@ -261,7 +260,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	}
 
 	if rdb.role == "slave" {
-		rdb.offset = totalBytes
+		rdb.offset += totalBytes
 		fmt.Printf("\nBytes processed: %d\n", rdb.offset)
 	}
 
