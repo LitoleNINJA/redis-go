@@ -243,7 +243,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		} else {
 			res = []byte("-ERR not a master\r\n")
 		}
-
 	case "type":
 		_, ok := rdb.getValue(args[0])
 		if !ok {
