@@ -240,11 +240,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 
 			// ask for ack from slaves
 			getACK()
-
-			time.Sleep(1 * time.Second)
-			getACK()
-			time.Sleep(1 * time.Second)
-
 		} else {
 			res = []byte("-ERR not a master\r\n")
 		}

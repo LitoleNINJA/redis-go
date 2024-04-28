@@ -1,28 +1,42 @@
-[replication-14] Running tests for Replication > Stage #14: ACKs with no commands
-[replication-14] Master is running on port 6379
-[replication-14] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
-[replication-14] ping received.
-[replication-14] +PONG sent.
+Debug = true
+[replication-15] Running tests for Replication > Stage #15: ACKs with commands
+[replication-15] Master is running on port 6379
+[replication-15] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
 [your_program] slave Listening on [::]:6380
 [your_program] Replica of: localhost:6379
+[replication-15] master: Received bytes: "*1\r\n$4\r\nping\r\n"
+[replication-15] master: Received RESP value: ["ping"]
+[replication-15] Received ["ping"]
+[replication-15] master: Sent "PONG"
+[replication-15] master: Sent bytes: "+PONG\r\n"
 [your_program] Received: +PONG
 [your_program] 
-[replication-14] REPLCONF listening-port 6380 received.
-[replication-14] +OK sent.
+[replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
+[replication-15] master: Received RESP value: ["REPLCONF", "listening-port", "6380"]
+[replication-15] Received ["REPLCONF", "listening-port", "6380"]
+[replication-15] master: Sent "OK"
+[replication-15] master: Sent bytes: "+OK\r\n"
+[replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
+[replication-15] master: Received RESP value: ["REPLCONF", "capa", "psync2"]
+[replication-15] Received ["REPLCONF", "capa", "psync2"]
 [your_program] Received: +OK
 [your_program] 
-[replication-14] REPLCONF capa psync2 received.
-[replication-14] +OK sent.
+[replication-15] master: Sent "OK"
+[replication-15] master: Sent bytes: "+OK\r\n"
+[replication-15] master: Received bytes: "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
+[replication-15] master: Received RESP value: ["PSYNC", "?", "-1"]
+[replication-15] Received ["PSYNC", "?", "-1"]
 [your_program] Received: +OK
 [your_program] 
-[replication-14] PSYNC ? -1 received.
-[replication-14] +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0 sent.
-[replication-14] RDB file sent
-[replication-14] $ redis-cli REPLCONF GETACK *
-[your_program] Received: +FULLRESYNC 4cdkr76c1vsw9exepk4thrcpf2c6ymet0ktoldhc 0
-[your_program] 
-[your_program] 
-[your_program] Received: $88
+[replication-15] master: Sent "FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0"
+[replication-15] master: Sent bytes: "+FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0\r\n"
+[replication-15] Sending RDB file...
+[replication-15] master: Sent bytes: "$88\r\nREDIS0011\xfa\tredis-ver\x057.2.0\xfa\nredis-bits\xc0@\xfa\x05ctime\xc2m\b\xbce\xfa\bused-mem°\xc4\x10\x00\xfa\baof-base\xc0\x00\xff\xf0n;\xfe\xc0\xffZ\xa2"
+[replication-15] Sent RDB file.
+[replication-15] master: $ redis-cli REPLCONF GETACK *
+[replication-15] master: Sent bytes: "*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"
+[your_program] Received: +FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0
+[your_program] $88
 [your_program] REDIS0011�	redis-ver7.2.0�
 [your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�*3
 [your_program] $8
@@ -31,34 +45,11 @@
 [your_program] GETACK
 [your_program] $1
 [your_program] *
-[your_program]  From: [::1]:6379
-[your_program] Buffer: [$88
-[your_program] REDIS0011�	redis-ver7.2.0�
-[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z� 3
-[your_program] $8
-[your_program] REPLCONF
-[your_program] $6
-[your_program] GETACK
-[your_program] $1
-[your_program]  
-[your_program] ]Command: , Args: []
-[your_program] Unknown command: 
-[your_program] Bytes processed: 130
-[your_program] Command: replconf, Args: [getack ]
-[your_program] Sending ACK to master
-[your_program] Bytes processed: 130
-[your_program] Sent: *3
-[your_program] $8
-[your_program] REPLCONF
-[your_program] $3
-[your_program] ACK
-[your_program] $3
-[your_program] 130
 [your_program] 
-[your_program] Command: , Args: []
-[your_program] Unknown command: 
-[your_program] Bytes processed: 130
-[replication-14] Expected: '0' and actual: '130' messages don't match
-[replication-14] Test failed
-[replication-14] Terminating program
-[replication-14] Program terminated successfully
+[replication-15] Received: "" (no content received)
+[replication-15]            ^ error
+[your_program] Error reading from connection:  EOF
+[replication-15] Error: Expected start of a new RESP value (either +, -, :, $ or *)
+[replication-15] Test failed
+[replication-15] Terminating program
+[replication-15] Program terminated successfully
