@@ -21,7 +21,6 @@ Debug = true
 [replication-15] Received ["REPLCONF", "capa", "psync2"]
 [your_program] Received: +OK
 [your_program] 
-[replication-15] master: Sent "OK"
 [replication-15] master: Sent bytes: "+OK\r\n"
 [replication-15] master: Received bytes: "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
 [replication-15] master: Received RESP value: ["PSYNC", "?", "-1"]
