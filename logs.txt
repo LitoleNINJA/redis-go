@@ -9,7 +9,6 @@
 [replication-15] master: Sent "PONG"
 [replication-15] master: Sent bytes: "+PONG\r\n"
 [your_program] Received: +PONG
-[your_program] 
 [replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
 [replication-15] master: Received RESP value: ["REPLCONF", "listening-port", "6380"]
 [replication-15] Received ["REPLCONF", "listening-port", "6380"]
