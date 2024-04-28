@@ -8,13 +8,13 @@
 [replication-15] Received ["ping"]
 [replication-15] master: Sent "PONG"
 [replication-15] master: Sent bytes: "+PONG\r\n"
+[your_program] Received: +PONG
+[your_program] 
 [replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
 [replication-15] master: Received RESP value: ["REPLCONF", "listening-port", "6380"]
 [replication-15] Received ["REPLCONF", "listening-port", "6380"]
 [replication-15] master: Sent "OK"
 [replication-15] master: Sent bytes: "+OK\r\n"
-[your_program] Received: +PONG
-[your_program] 
 [your_program] Received: +OK
 [your_program] 
 [replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
@@ -37,30 +37,16 @@
 [your_program] Received: +FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0
 [your_program] 
 [your_program] 
-[replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$2\r\n93\r\n"
-[replication-15] master: Received RESP value: ["REPLCONF", "ACK", "93"]
 [your_program] Received: $88\r\nREDIS0011�	redis-ver7.2.0�\nredis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�
 [your_program]  From: [::1]:6379
-[your_program] Buffer: [$88
-[replication-15] Expected argument #2 to be "0", got "93"
-[your_program] REDIS0011�	redis-ver7.2.0�
-[replication-15] Test failed
-[replication-15] Terminating program
-[your_program] redis-bits�@�ctime�m�e�used-mem°��aof-base���n;���Z�]Command: , Args: []
+[your_program] Command: , Args: []
 [your_program] Unknown command: 
 [your_program] 
 [your_program] Bytes processed: 93
 [your_program] 
 [your_program] Received: *3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n
 [your_program]  From: [::1]:6379
-[your_program] Buffer: [3
-[your_program] $8
-[your_program] REPLCONF
-[your_program] $6
-[your_program] GETACK
-[your_program] $1
-[your_program]  
-[your_program] ]Command: replconf, Args: [getack ]
+[your_program] Command: replconf, Args: [getack ]
 [your_program] Sending ACK to master
 [your_program] 
 [your_program] Bytes processed: 130
@@ -68,5 +54,11 @@
 [your_program] Command: , Args: []
 [your_program] Unknown command: 
 [your_program] 
-[your_program] Bytes processed: 130
+[your_program] Bytes processed: 167
+[replication-15] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$2\r\n93\r\n"
+[replication-15] master: Received RESP value: ["REPLCONF", "ACK", "93"]
+[replication-15] Expected argument #2 to be "0", got "93"
+[replication-15] Test failed
+[replication-15] Terminating program
+[your_program] Error reading from connection:  EOF
 [replication-15] Program terminated successfully

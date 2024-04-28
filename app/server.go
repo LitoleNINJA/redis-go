@@ -261,7 +261,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 
 	if rdb.role == "slave" {
 		rdb.offset += totalBytes
-		fmt.Printf("\nBytes processed: %d\n", rdb.offset)
+		fmt.Printf("\nCurrent Bytes: %d, Bytes processed: %d\n", totalBytes, rdb.offset)
 	}
 
 	return res
