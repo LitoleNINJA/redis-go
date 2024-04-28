@@ -90,6 +90,7 @@ var rdb = redisDB{
 
 var port = flag.String("port", "6379", "Port to listen on")
 var isReplica = flag.String("replicaof", "", "Replica of")
+var handshakeComplete = false
 
 func main() {
 	var masterIp, masterPort string
@@ -130,7 +131,7 @@ func main() {
 				os.Exit(1)
 			}
 
-			handleConnection(conn)
+			go handleConnection(conn)
 		}
 	}
 }
@@ -218,6 +219,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		} else {
 			res = []byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(strconv.Itoa(rdb.offset)), strconv.Itoa(rdb.offset)))
 			fmt.Println("Sending ACK to master")
+			handshakeComplete = true
 		}
 	case "psync":
 		if rdb.role == "master" {
@@ -239,6 +241,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			rdb.replicas[conn.RemoteAddr().String()] = conn
 
 			// ask for ack from slaves
+			time.Sleep(1 * time.Second)
 			getACK()
 		} else {
 			res = []byte("-ERR not a master\r\n")
@@ -259,7 +262,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		}
 	}
 
-	if rdb.role == "slave" {
+	if rdb.role == "slave" && handshakeComplete {
 		rdb.offset += totalBytes
 		fmt.Printf("\nCurrent Bytes: %d,  Bytes processed: %d\n", totalBytes, rdb.offset)
 	}
