@@ -15,16 +15,16 @@ func addCommandToBuffer(buf string) {
 			rdb.buffer = append(rdb.buffer, a[i])
 		}
 	}
-	fmt.Printf("Buffer: %s", rdb.buffer)
+	// fmt.Printf("Buffer: %s", rdb.buffer)
 }
 
 // parse command from buffer and return command and args
 func parseCommand(buf string) (string, []string) {
 	a := strings.Split(buf, "\r\n")
 	// for local testing
-	// if len(a) == 1 {
-	// 	a = strings.Split(buf, "\\r\\n")
-	// }
+	if len(a) == 1 {
+		a = strings.Split(buf, "\\r\\n")
+	}
 	n, _ := strconv.ParseInt(a[0], 10, 64)
 
 	var cmd string
@@ -162,9 +162,18 @@ func getACK() {
 	for _, conn := range rdb.replicas {
 		res := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n")
 		_, err := conn.Write(res)
+		printCommand(res)
 		if err != nil {
 			fmt.Println("Error writing to slave: ", err.Error())
 		}
 		fmt.Printf("\nGet ACK from %s\n", conn.RemoteAddr())
 	}
+}
+
+// print command for debugging
+func printCommand(res []byte) string {
+	cmd := string(res)
+	cmd = strings.ReplaceAll(cmd, "\n", "\\n")
+	cmd = strings.ReplaceAll(cmd, "\r", "\\r")
+	return cmd
 }

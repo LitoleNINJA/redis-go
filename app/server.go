@@ -146,7 +146,7 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error reading from connection: ", err.Error())
 			return
 		}
-		fmt.Printf("\nReceived: %s From: %s\n", buf[:n], conn.RemoteAddr())
+		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
 		totalBytes += n
 
 		addCommandToBuffer(string(buf))
@@ -163,7 +163,7 @@ func handleConnection(conn net.Conn) {
 					fmt.Println("Error writing to connection: ", err.Error())
 					return
 				}
-				fmt.Printf("Sent: %s\n", res)
+				fmt.Printf("Sent: %s\n", printCommand(res))
 			}
 		}
 	}
@@ -222,7 +222,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	case "psync":
 		if rdb.role == "master" {
 			res = []byte("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n")
-			fmt.Printf("Sent: %s\n", res)
+			fmt.Printf("Sent: %s\n", printCommand(res))
 			conn.Write(res)
 			emptyRdbFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 			emptyRdbFile, err := hex.DecodeString(emptyRdbFileHex)
@@ -232,7 +232,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			}
 			res = []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRdbFile), emptyRdbFile))
 			conn.Write(res)
-			fmt.Printf("Sent: %s\n", res)
+			fmt.Printf("Sent: %s\n", printCommand(res))
 			res = []byte("")
 
 			// add slave to replicas
@@ -240,6 +240,11 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 
 			// ask for ack from slaves
 			getACK()
+
+			time.Sleep(1 * time.Second)
+			getACK()
+			time.Sleep(1 * time.Second)
+
 		} else {
 			res = []byte("-ERR not a master\r\n")
 		}
@@ -261,7 +266,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 
 	if rdb.role == "slave" {
 		rdb.offset = totalBytes
-		fmt.Printf("Bytes processed: %d\n", rdb.offset)
+		fmt.Printf("\nBytes processed: %d\n", rdb.offset)
 	}
 
 	return res
