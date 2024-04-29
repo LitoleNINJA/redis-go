@@ -55,7 +55,7 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 	val, ok := rdb.data[key]
 	if !ok {
 		fmt.Println("Key not found: ", key)
-		return "", false
+		return "$-1\r\n", false
 	}
 	timeElapsed := time.Now().UnixMilli() - val.createdAt
 	if val.expiry > 0 && timeElapsed > val.expiry {
@@ -94,6 +94,7 @@ var handshakeComplete = false
 
 func main() {
 	var masterIp, masterPort string
+	flag.Parse()
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--replicaof" && i+2 < len(args) {
@@ -102,7 +103,6 @@ func main() {
 			break
 		}
 	}
-	flag.Parse()
 	if *isReplica != "" {
 		rdb.role = "slave"
 	}
@@ -122,23 +122,19 @@ func main() {
 			fmt.Println("Error during handshake: ", err.Error())
 			os.Exit(1)
 		}
-		handleConnection(conn)
-	} else {
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				fmt.Println("Error accepting connection: ", err.Error())
-				os.Exit(1)
-			}
-
-			handleConnection(conn)
+		go handleConnection(conn)
+	}
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
 		}
+		go handleConnection(conn)
 	}
 }
 
 func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
 	for {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -148,14 +144,17 @@ func handleConnection(conn net.Conn) {
 		}
 		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
 
-		addCommandToBuffer(string(buf))
+		addCommandToBuffer(string(buf), n)
 
 		for len(rdb.buffer) > 0 {
-			cmd, args := parseCommand(rdb.buffer[0])
+			if string(rdb.buffer[0][0]) != "*" {
+				rdb.buffer = rdb.buffer[1:]
+				continue
+			}
+			cmd, args, totalBytes := parseCommand(rdb.buffer[0])
 			rdb.buffer = rdb.buffer[1:]
 
-			res := handleCommand(cmd, args, conn, len(rdb.buffer[0]))
-			fmt.Printf("Cmd: %s, Bytes: %d\n", cmd, len(rdb.buffer[0]))
+			res := handleCommand(cmd, args, conn, totalBytes)
 
 			if len(res) > 0 {
 				_, err = conn.Write(res)
@@ -243,8 +242,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			// add slave to replicas
 			rdb.replicas[conn.RemoteAddr().String()] = conn
 
-			// ask for ack from slaves
-			getACK()
+			// ask for ack from slaves (for testing)
+			// getACK()
 		} else {
 			res = []byte("-ERR not a master\r\n")
 		}
@@ -264,7 +263,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		}
 	}
 
-	if rdb.role == "slave" && handshakeComplete && len(res) > 0 {
+	if rdb.role == "slave" && handshakeComplete {
 		rdb.offset += totalBytes
 		fmt.Printf("\nCmd: %s,  Current Bytes: %d,  Bytes processed: %d\n", cmd, totalBytes, rdb.offset)
 	}

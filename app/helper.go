@@ -5,27 +5,41 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // handle multiple commands at once and add them to buffer
-func addCommandToBuffer(buf string) {
-	a := strings.Split(buf, "*")
-	for i := 0; i < len(a); i++ {
-		if len(a[i]) > 0 {
-			rdb.buffer = append(rdb.buffer, a[i])
+func addCommandToBuffer(buf string, n int) {
+	prev := 0
+	for i := 0; i < n; i++ {
+		if buf[i] == '*' && unicode.IsDigit(rune(buf[i+1])) {
+			str := buf[prev:i]
+			if len(str) > 1 && str[0] != '*' {
+				a := strings.Split(str, "$")
+				a[1] = "$" + a[1]
+				for _, s := range a {
+					if len(s) > 0 {
+						rdb.buffer = append(rdb.buffer, s)
+					}
+				}
+			} else if len(str) > 1 {
+				rdb.buffer = append(rdb.buffer, str)
+			}
+			prev = i
 		}
 	}
-	fmt.Printf("Buffer: %s", printCommand([]byte(strings.Join(rdb.buffer, ", "))))
+	rdb.buffer = append(rdb.buffer, buf[prev:n])
+	fmt.Printf("Buffer: %s\n", printCommand([]byte(strings.Join(rdb.buffer, ", "))))
 }
 
 // parse command from buffer and return command and args
-func parseCommand(buf string) (string, []string) {
+func parseCommand(buf string) (string, []string, int) {
 	a := strings.Split(buf, "\r\n")
 	// for local testing
-	// if len(a) == 1 {
-	// 	a = strings.Split(buf, "\\r\\n")
-	// }
-	n, _ := strconv.ParseInt(a[0], 10, 64)
+	if len(a) == 1 {
+		a = strings.Split(buf, "\\r\\n")
+	}
+	n, _ := strconv.ParseInt(string(a[0][1]), 10, 64)
 
 	var cmd string
 	args := make([]string, 0)
@@ -44,7 +58,7 @@ func parseCommand(buf string) (string, []string) {
 		}
 	}
 	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
-	return cmd, args
+	return cmd, args, len(buf)
 }
 
 // start handshake with master
@@ -134,14 +148,6 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 		fmt.Println("Error writing to master: ", err.Error())
 		return err
 	}
-
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
-		return err
-	}
-	fmt.Printf("Received: %s\n", buf[:n])
 	return nil
 }
 
@@ -153,7 +159,7 @@ func migrateToSlaves(key, value string) {
 		if err != nil {
 			fmt.Println("Error writing to replica: ", err.Error())
 		}
-		fmt.Printf("Sent Migration: %s to %s\n", string(res), conn.RemoteAddr())
+		fmt.Printf("\nSent Migration: %s to %s\n", printCommand(res), conn.RemoteAddr())
 	}
 }
 
