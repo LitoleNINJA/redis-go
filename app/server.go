@@ -248,7 +248,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte("-ERR not a master\r\n")
 		}
 	case "wait":
-		res = []byte(":0\r\n")
+		replicaCount := len(rdb.replicas)
+		res = []byte(fmt.Sprintf(":%d\r\n", replicaCount))
 	case "type":
 		_, ok := rdb.getValue(args[0])
 		if !ok {
