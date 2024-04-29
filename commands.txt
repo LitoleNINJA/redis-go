@@ -5,7 +5,7 @@ Redis Commands
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\nbar\r\n		    SET foo bar
 *2\r\n$3\r\nget\r\n$3\r\nfoo\r\n					    GET foo
 *3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n     REPLCONF GETACK
-*3\r\n$4\r\nwait\r\n$1\r\n0\r\n$5\r\n60000\r\n          WAIT
+*3\r\n$4\r\nwait\r\n$1\r\n3\r\n$5\r\n500\r\n          WAIT
 *2\r\n$4\r\ntype\r\n$3\r\nfoo\r\n					    TYPE foo
 
 

@@ -29,6 +29,8 @@ type redisDB struct {
 	buffer   []string
 	replicas map[string]net.Conn
 	offset   int
+	ackCnt   int
+	ackChan  chan struct{}
 }
 
 type redisValue struct {
@@ -43,7 +45,7 @@ type replicationInfo struct {
 	master_repl_offset int
 }
 
-func (rdb redisDB) setValue(key string, value string, expiry int64) {
+func (rdb *redisDB) setValue(key string, value string, expiry int64) {
 	rdb.data[key] = redisValue{
 		value:     value,
 		createdAt: time.Now().UnixMilli(),
@@ -51,7 +53,7 @@ func (rdb redisDB) setValue(key string, value string, expiry int64) {
 	}
 }
 
-func (rdb redisDB) getValue(key string) (string, bool) {
+func (rdb *redisDB) getValue(key string) (string, bool) {
 	val, ok := rdb.data[key]
 	if !ok {
 		fmt.Println("Key not found: ", key)
@@ -66,7 +68,7 @@ func (rdb redisDB) getValue(key string) (string, bool) {
 	return val.value, true
 }
 
-func (info replicationInfo) infoResp() []byte {
+func (info *replicationInfo) infoResp() []byte {
 	l1 := "role:" + info.role
 	l2 := "master_replid:" + info.master_replid
 	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
@@ -78,6 +80,25 @@ func (info replicationInfo) infoResp() []byte {
 	return []byte(resp)
 }
 
+func (rdb *redisDB) incrementACK() {
+	rdb.mux.Lock()
+	rdb.ackCnt++
+	rdb.mux.Unlock()
+	rdb.ackChan <- struct{}{}
+}
+
+func (rdb *redisDB) getAckCnt() int {
+	rdb.mux.Lock()
+	defer rdb.mux.Unlock()
+	return rdb.ackCnt
+}
+
+func (rdb *redisDB) setAckCnt(cnt int) {
+	rdb.mux.Lock()
+	defer rdb.mux.Unlock()
+	rdb.ackCnt = cnt
+}
+
 var rdb = redisDB{
 	data:     make(map[string]redisValue),
 	role:     "master",
@@ -86,6 +107,8 @@ var rdb = redisDB{
 	buffer:   make([]string, 0),
 	replicas: make(map[string]net.Conn),
 	offset:   0,
+	ackCnt:   0,
+	ackChan:  make(chan struct{}, 10),
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -190,6 +213,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		rdb.setValue(args[0], args[1], exp)
 		rdb.mux.Unlock()
 		if rdb.role == "master" {
+			rdb.offset += totalBytes
 			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
 			res = []byte("+OK\r\n")
 			migrateToSlaves(args[0], args[1])
@@ -214,6 +238,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		if rdb.role == "master" {
 			if args[0] == "ack" {
 				fmt.Println("Received ACK from slave")
+				rdb.incrementACK()
+				fmt.Println("Ack count: ", rdb.getAckCnt())
 				return []byte("")
 			} else {
 				res = []byte("+OK\r\n")
@@ -248,8 +274,34 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte("-ERR not a master\r\n")
 		}
 	case "wait":
-		replicaCount := len(rdb.replicas)
-		res = []byte(fmt.Sprintf(":%d\r\n", replicaCount))
+		if rdb.offset == 0 {
+			fmt.Println("Master has not propagated any commands")
+			res = []byte(fmt.Sprintf(":%d\r\n", len(rdb.replicas)))
+		} else {
+			minRepCnt, _ := strconv.Atoi(args[0])
+			timeout, _ := strconv.Atoi(args[1])
+			endTime := time.Now().Add(time.Duration(timeout) * time.Millisecond)
+			tick := time.NewTicker(10 * time.Millisecond)
+			defer tick.Stop()
+			rdb.setAckCnt(0)
+
+			getACK()
+			done := false
+
+			for !done {
+				select {
+				case <-rdb.ackChan:
+					if rdb.getAckCnt() >= minRepCnt {
+						done = true
+					}
+				case <-tick.C:
+					if time.Now().After(endTime) {
+						done = true
+					}
+				}
+			}
+			res = []byte(fmt.Sprintf(":%d\r\n", rdb.getAckCnt()))
+		}
 	case "type":
 		_, ok := rdb.getValue(args[0])
 		if !ok {

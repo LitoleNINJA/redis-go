@@ -166,7 +166,7 @@ func migrateToSlaves(key, value string) {
 // ask for ACK from slaves (for debugging)
 func getACK() {
 	for _, conn := range rdb.replicas {
-		res := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n")
+		res := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 		_, err := conn.Write(res)
 		fmt.Printf("Sent: %s\n", printCommand(res))
 		if err != nil {
