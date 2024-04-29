@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
@@ -182,4 +183,54 @@ func printCommand(res []byte) string {
 	cmd = strings.ReplaceAll(cmd, "\n", "\\n")
 	cmd = strings.ReplaceAll(cmd, "\r", "\\r")
 	return cmd
+}
+
+// read RDB file and return data
+func readRDBFile(dir string, fileName string) (rdbFile, error) {
+	file, err := os.Open(dir + "/" + fileName)
+	if err != nil {
+		fmt.Println("Error opening RDB file: ", err.Error())
+		return rdbFile{}, err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 2048)
+	n, err := file.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading RDB file: ", err.Error())
+		return rdbFile{}, err
+	}
+
+	var keys []byte
+	for i := 0; i < n; i++ {
+		if i+2 < n && buf[i] == 254 && buf[i+1] == 0 && buf[i+2] == 251 {
+			keys = buf[i+3:]
+			break
+		}
+	}
+	if len(keys) == 0 {
+		fmt.Println("No keys found in RDB file")
+		return rdbFile{}, nil
+	}
+	keys = keys[2:]
+	var rdbfile rdbFile
+	rdbfile.data = make(map[string]string)
+	for i := 0; i < len(keys); i++ {
+		if keys[i] == 0 {
+			keyLength := int(keys[i+1])
+			if keyLength == 0 {
+				break
+			}
+			key := string(keys[i+2 : i+2+keyLength])
+			i += 2 + keyLength
+
+			valLength := int(keys[i])
+			value := string(keys[i+1 : i+1+valLength])
+
+			rdbfile.data[key] = value
+		} else {
+			i++
+		}
+	}
+	return rdbfile, nil
 }

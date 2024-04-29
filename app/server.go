@@ -45,6 +45,10 @@ type replicationInfo struct {
 	master_repl_offset int
 }
 
+type rdbFile struct {
+	data map[string]string
+}
+
 func (rdb *redisDB) setValue(key string, value string, expiry int64) {
 	rdb.data[key] = redisValue{
 		value:     value,
@@ -311,6 +315,20 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte(fmt.Sprintf("*2\r\n$10\r\ndbfilename\r\n$%d\r\n%s\r\n", len(*dbFileName), *dbFileName))
 		} else {
 			res = []byte("-ERR unsupported CONFIG parameter\r\n")
+		}
+	case "keys":
+		rdbfile, err := readRDBFile(*dir, *dbFileName)
+		if err != nil {
+			res = []byte("-ERR error reading RDB file\r\n")
+		} else {
+			keys := make([]string, 0)
+			for k := range rdbfile.data {
+				keys = append(keys, k)
+			}
+			res = []byte(fmt.Sprintf("*%d\r\n", len(keys)))
+			for _, k := range keys {
+				res = append(res, fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)...)
+			}
 		}
 	case "type":
 		_, ok := rdb.getValue(args[0])
