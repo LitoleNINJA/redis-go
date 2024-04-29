@@ -113,6 +113,8 @@ var rdb = redisDB{
 
 var port = flag.String("port", "6379", "Port to listen on")
 var isReplica = flag.String("replicaof", "", "Replica of")
+var dir = flag.String("dir", "", "Directory to store RDB file")
+var dbFileName = flag.String("dbfilename", "dump.rdb", "RDB file name")
 var handshakeComplete = false
 
 func main() {
@@ -301,6 +303,14 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 				}
 			}
 			res = []byte(fmt.Sprintf(":%d\r\n", rdb.getAckCnt()))
+		}
+	case "config":
+		if args[0] == "get" && args[1] == "dir" {
+			res = []byte(fmt.Sprintf("*2\r\n$3\r\ndir\r\n$%d\r\n%s\r\n", len(*dir), *dir))
+		} else if args[0] == "get" && args[1] == "dbfilename" {
+			res = []byte(fmt.Sprintf("*2\r\n$10\r\ndbfilename\r\n$%d\r\n%s\r\n", len(*dbFileName), *dbFileName))
+		} else {
+			res = []byte("-ERR unsupported CONFIG parameter\r\n")
 		}
 	case "type":
 		_, ok := rdb.getValue(args[0])
