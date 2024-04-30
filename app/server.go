@@ -22,20 +22,22 @@ const (
 
 // RedisDB is a simple in-memory key-value store
 type redisDB struct {
-	data     map[string]redisValue
-	role     string
-	replID   string
-	mux      *sync.Mutex
-	buffer   []string
-	replicas map[string]net.Conn
-	offset   int
-	ackCnt   int
-	ackChan  chan struct{}
-	rdbFile  rdbFile
+	data        map[string]redisValue
+	role        string
+	replID      string
+	mux         *sync.Mutex
+	buffer      []string
+	replicas    map[string]net.Conn
+	offset      int
+	ackCnt      int
+	ackChan     chan struct{}
+	rdbFile     rdbFile
+	redisStream redisStream
 }
 
 type redisValue struct {
 	value     string
+	valType   string
 	createdAt int64
 	expiry    int64
 }
@@ -50,10 +52,20 @@ type rdbFile struct {
 	data map[string]redisValue
 }
 
-func (rdb *redisDB) setValue(key string, value string, createdAt int64, expiry int64) {
+type redisStream struct {
+	data map[string]redisStreamEntry
+}
+
+type redisStreamEntry struct {
+	id     string
+	fields map[string]string
+}
+
+func (rdb *redisDB) setValue(key string, value string, valType string, createdAt int64, expiry int64) {
 	rdb.mux.Lock()
 	rdb.data[key] = redisValue{
 		value:     value,
+		valType:   valType,
 		createdAt: createdAt,
 		expiry:    expiry,
 	}
@@ -108,16 +120,17 @@ func (rdb *redisDB) setAckCnt(cnt int) {
 }
 
 var rdb = redisDB{
-	data:     make(map[string]redisValue),
-	role:     "master",
-	replID:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-	mux:      &sync.Mutex{},
-	buffer:   make([]string, 0),
-	replicas: make(map[string]net.Conn),
-	offset:   0,
-	ackCnt:   0,
-	ackChan:  make(chan struct{}, 10),
-	rdbFile:  rdbFile{data: make(map[string]redisValue)},
+	data:        make(map[string]redisValue),
+	role:        "master",
+	replID:      "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+	mux:         &sync.Mutex{},
+	buffer:      make([]string, 0),
+	replicas:    make(map[string]net.Conn),
+	offset:      0,
+	ackCnt:      0,
+	ackChan:     make(chan struct{}, 10),
+	rdbFile:     rdbFile{data: make(map[string]redisValue)},
+	redisStream: redisStream{data: make(map[string]redisStreamEntry)},
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -149,7 +162,7 @@ func main() {
 			fmt.Println("RDB file loaded")
 
 			for k, v := range rdb.rdbFile.data {
-				rdb.setValue(k, v.value, v.createdAt, v.expiry)
+				rdb.setValue(k, v.value, "string", v.createdAt, v.expiry)
 				fmt.Println("Loaded key: ", k, v.value, time.Now().UnixMilli()-v.createdAt, v.expiry)
 			}
 		}
@@ -235,7 +248,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			exp, _ = strconv.ParseInt(args[3], 10, 64)
 		}
 
-		rdb.setValue(args[0], args[1], time.Now().UnixMilli(), exp)
+		rdb.setValue(args[0], args[1], "string", time.Now().UnixMilli(), exp)
 		if rdb.role == "master" {
 			rdb.offset += totalBytes
 			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
@@ -344,12 +357,22 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = append(res, fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)...)
 		}
 	case "type":
-		_, ok := rdb.getValue(args[0])
-		if !ok {
-			res = []byte(fmt.Sprintf("+%s\r\n", "none"))
+		if val, ok := rdb.data[args[0]]; ok {
+			res = []byte(fmt.Sprintf("+%s\r\n", val.valType))
 		} else {
-			res = []byte(fmt.Sprintf("+%s\r\n", "string"))
+			res = []byte("+none\r\n")
 		}
+	case "xadd":
+		key := args[0]
+		id := args[1]
+		fields := make(map[string]string)
+		for i := 2; i < len(args); i += 2 {
+			fields[args[i]] = args[i+1]
+		}
+		rdb.redisStream.data[key] = redisStreamEntry{id: id, fields: fields}
+		fmt.Printf("Added stream entry: %s, %s\n", key, id)
+		rdb.setValue(key, id, "stream", time.Now().UnixMilli(), 0)
+		res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(id), id))
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
