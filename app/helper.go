@@ -253,3 +253,14 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	}
 	return rdbfile, nil
 }
+
+// validate stream ID
+func validateStreamID(id string) string {
+	if id == "0-0" {
+		return "The ID specified in XADD must be greater than 0-0"
+	}
+	if id <= lastStreamID {
+		return "The ID specified in XADD is equal or smaller than the target stream top item"
+	}
+	return ""
+}

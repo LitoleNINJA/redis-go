@@ -138,6 +138,7 @@ var isReplica = flag.String("replicaof", "", "Replica of")
 var dir = flag.String("dir", "", "Directory to store RDB file")
 var dbFileName = flag.String("dbfilename", "", "RDB file name")
 var handshakeComplete = false
+var lastStreamID = ""
 
 func main() {
 	var masterIp, masterPort string
@@ -365,6 +366,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	case "xadd":
 		key := args[0]
 		id := args[1]
+
+		err := validateStreamID(id)
+		if err != "" {
+			res = []byte(fmt.Sprintf("-ERR %s\r\n", err))
+			break
+		}
+		lastStreamID = id
 		fields := make(map[string]string)
 		for i := 2; i < len(args); i += 2 {
 			fields[args[i]] = args[i+1]
