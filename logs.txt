@@ -2,7 +2,6 @@
 [replication-15] Master is running on port 6379
 [replication-15] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
 [your_program] slave Listening on [::]:6380
-[your_program] Replica of: localhost:6379
 [replication-15] master: Received bytes: "*1\r\n$4\r\nping\r\n"
 [replication-15] master: Received RESP value: ["ping"]
 [replication-15] Received ["ping"]
