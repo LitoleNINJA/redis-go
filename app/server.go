@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -53,7 +54,8 @@ type rdbFile struct {
 }
 
 type redisStream struct {
-	data map[string]redisStreamEntry
+	data      map[string]redisStreamEntry
+	streamIds map[string]int
 }
 
 type redisStreamEntry struct {
@@ -130,7 +132,7 @@ var rdb = redisDB{
 	ackCnt:      0,
 	ackChan:     make(chan struct{}, 10),
 	rdbFile:     rdbFile{data: make(map[string]redisValue)},
-	redisStream: redisStream{data: make(map[string]redisStreamEntry)},
+	redisStream: redisStream{data: make(map[string]redisStreamEntry), streamIds: make(map[string]int)},
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -367,17 +369,38 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		key := args[0]
 		id := args[1]
 
-		err := validateStreamID(id)
-		if err != "" {
-			res = []byte(fmt.Sprintf("-ERR %s\r\n", err))
-			break
+		if id == "*" {
+			// do something
+		} else if strings.HasSuffix(id, "-*") {
+			parts := strings.Split(id, "-")
+			val, ok := rdb.redisStream.streamIds[parts[0]]
+			fmt.Println("Stream ID: ", id, val, ok, rdb.redisStream.streamIds)
+			if !ok {
+				if strings.HasPrefix(id, "0-") {
+					id = id[:len(id)-1] + "1"
+				} else {
+					id = id[:len(id)-1] + "0"
+				}
+			} else {
+				id = id[:len(id)-1] + strconv.Itoa(val+1)
+			}
+		} else {
+			err := validateStreamID(id)
+			if err != "" {
+				res = []byte(fmt.Sprintf("-ERR %s\r\n", err))
+				break
+			}
 		}
 		lastStreamID = id
 		fields := make(map[string]string)
 		for i := 2; i < len(args); i += 2 {
 			fields[args[i]] = args[i+1]
 		}
+
 		rdb.redisStream.data[key] = redisStreamEntry{id: id, fields: fields}
+		parts := strings.Split(id, "-")
+		val, _ := strconv.Atoi(parts[1])
+		rdb.redisStream.streamIds[parts[0]] = val
 		fmt.Printf("Added stream entry: %s, %s\n", key, id)
 		rdb.setValue(key, id, "stream", time.Now().UnixMilli(), 0)
 		res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(id), id))
