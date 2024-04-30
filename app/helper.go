@@ -194,7 +194,7 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	}
 	defer file.Close()
 
-	buf := make([]byte, 2048)
+	buf := make([]byte, 4096)
 	n, err := file.Read(buf)
 	if err != nil {
 		fmt.Println("Error reading RDB file: ", err.Error())
@@ -213,9 +213,10 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 		return rdbFile{}, nil
 	}
 	keys = keys[2:]
+
 	var rdbfile rdbFile
 	rdbfile.data = make(map[string]string)
-	for i := 0; i < len(keys); i++ {
+	for i := 0; i < len(keys); {
 		// check if value type is string
 		if keys[i] == 0 {
 			keyLength := int(keys[i+1])
@@ -227,6 +228,7 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 
 			valLength := int(keys[i])
 			value := string(keys[i+1 : i+1+valLength])
+			i += 1 + valLength
 
 			rdbfile.data[key] = value
 		} else {
