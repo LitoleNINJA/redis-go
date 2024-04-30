@@ -8,7 +8,7 @@ Redis Commands
 *3\r\n$4\r\nwait\r\n$1\r\n3\r\n$5\r\n500\r\n                                        WAIT 3 500
 *3\r\n$6\r\nconfig\r\n$3\r\nget\r\n$3\r\ndir\r\n                                    CONFIG GET DIR            
 *2\r\n$4\r\ntype\r\n$3\r\nfoo\r\n					                                TYPE foo
-*5\r\n$4\r\nxadd\r\n$10\r\nstream_key\r\n$3\r\n0-*\r\n$3\r\nfoo\r\n$3\r\nbar\r\n    XADD stream_key 0-1 foo bar 
+*5\r\n$4\r\nxadd\r\n$10\r\nstream_key\r\n$3\r\n1-*\r\n$3\r\nfoo\r\n$3\r\nbar\r\n    XADD stream_key 1-* foo bar 
 
 
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\n123\r\n*3\r\n$3\r\nset\r\n$3\r\nbar\r\n$3\r\n456\r\n*3\r\n$3\r\nset\r\n$3\r\nbaz\r\n$3\r\n789\r\n

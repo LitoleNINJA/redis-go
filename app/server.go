@@ -370,11 +370,16 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		id := args[1]
 
 		if id == "*" {
-			// do something
+			t := int(time.Now().UnixMilli())
+			val, ok := rdb.redisStream.streamIds[strconv.Itoa(t)]
+			if !ok {
+				id = strconv.Itoa(t) + "-0"
+			} else {
+				id = strconv.Itoa(t) + "-" + strconv.Itoa(val+1)
+			}
 		} else if strings.HasSuffix(id, "-*") {
 			parts := strings.Split(id, "-")
 			val, ok := rdb.redisStream.streamIds[parts[0]]
-			fmt.Println("Stream ID: ", id, val, ok, rdb.redisStream.streamIds)
 			if !ok {
 				if strings.HasPrefix(id, "0-") {
 					id = id[:len(id)-1] + "1"
