@@ -47,14 +47,14 @@ type replicationInfo struct {
 }
 
 type rdbFile struct {
-	data map[string]string
+	data map[string]redisValue
 }
 
-func (rdb *redisDB) setValue(key string, value string, expiry int64) {
+func (rdb *redisDB) setValue(key string, value string, createdAt int64, expiry int64) {
 	rdb.mux.Lock()
 	rdb.data[key] = redisValue{
 		value:     value,
-		createdAt: time.Now().UnixMilli(),
+		createdAt: createdAt,
 		expiry:    expiry,
 	}
 	rdb.mux.Unlock()
@@ -67,6 +67,7 @@ func (rdb *redisDB) getValue(key string) (string, bool) {
 		return "$-1\r\n", false
 	}
 	timeElapsed := time.Now().UnixMilli() - val.createdAt
+	fmt.Println("Data for key: ", key, timeElapsed, val.createdAt, val.expiry)
 	if val.expiry > 0 && timeElapsed > val.expiry {
 		fmt.Println("Key expired: ", key)
 		delete(rdb.data, key)
@@ -116,7 +117,7 @@ var rdb = redisDB{
 	offset:   0,
 	ackCnt:   0,
 	ackChan:  make(chan struct{}, 10),
-	rdbFile:  rdbFile{data: make(map[string]string)},
+	rdbFile:  rdbFile{data: make(map[string]redisValue)},
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -148,8 +149,8 @@ func main() {
 			fmt.Println("RDB file loaded")
 
 			for k, v := range rdb.rdbFile.data {
-				rdb.setValue(k, v, 0)
-				fmt.Println("Loaded key: ", k, v)
+				rdb.setValue(k, v.value, v.createdAt, v.expiry)
+				fmt.Println("Loaded key: ", k, v.value, time.Now().UnixMilli()-v.createdAt, v.expiry)
 			}
 		}
 	}
@@ -234,7 +235,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			exp, _ = strconv.ParseInt(args[3], 10, 64)
 		}
 
-		rdb.setValue(args[0], args[1], exp)
+		rdb.setValue(args[0], args[1], time.Now().UnixMilli(), exp)
 		if rdb.role == "master" {
 			rdb.offset += totalBytes
 			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
