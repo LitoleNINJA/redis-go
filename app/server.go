@@ -433,6 +433,10 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			endVal = end
 			endSeq = 0
 		}
+		if end == "+" {
+			endVal = "9999999999999"
+			endSeq = 999999999
+		}
 
 		entries := make([]redisStreamEntry, 0)
 		for _, v := range rdb.redisStream.data[key] {
@@ -451,7 +455,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
 			}
 		}
-		fmt.Printf("Stream entries: %s\n", resString)
 		res = []byte(resString)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
