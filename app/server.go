@@ -31,6 +31,7 @@ type redisDB struct {
 	offset   int
 	ackCnt   int
 	ackChan  chan struct{}
+	rdbFile  rdbFile
 }
 
 type redisValue struct {
@@ -50,11 +51,13 @@ type rdbFile struct {
 }
 
 func (rdb *redisDB) setValue(key string, value string, expiry int64) {
+	rdb.mux.Lock()
 	rdb.data[key] = redisValue{
 		value:     value,
 		createdAt: time.Now().UnixMilli(),
 		expiry:    expiry,
 	}
+	rdb.mux.Unlock()
 }
 
 func (rdb *redisDB) getValue(key string) (string, bool) {
@@ -113,12 +116,13 @@ var rdb = redisDB{
 	offset:   0,
 	ackCnt:   0,
 	ackChan:  make(chan struct{}, 10),
+	rdbFile:  rdbFile{data: make(map[string]string)},
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
 var isReplica = flag.String("replicaof", "", "Replica of")
 var dir = flag.String("dir", "", "Directory to store RDB file")
-var dbFileName = flag.String("dbfilename", "dump.rdb", "RDB file name")
+var dbFileName = flag.String("dbfilename", "", "RDB file name")
 var handshakeComplete = false
 
 func main() {
@@ -134,6 +138,20 @@ func main() {
 	}
 	if *isReplica != "" {
 		rdb.role = "slave"
+	}
+	if *dir != "" && *dbFileName != "" {
+		rdbFile, err := readRDBFile(*dir, *dbFileName)
+		if err != nil {
+			fmt.Println("Error reading RDB file: ", err.Error())
+		} else {
+			rdb.rdbFile = rdbFile
+			fmt.Println("RDB file loaded")
+
+			for k, v := range rdb.rdbFile.data {
+				rdb.setValue(k, v, 0)
+				fmt.Println("Loaded key: ", k, v)
+			}
+		}
 	}
 
 	l, err := net.Listen("tcp", "0.0.0.0:"+*port)
@@ -215,9 +233,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		} else {
 			exp, _ = strconv.ParseInt(args[3], 10, 64)
 		}
-		rdb.mux.Lock()
+
 		rdb.setValue(args[0], args[1], exp)
-		rdb.mux.Unlock()
 		if rdb.role == "master" {
 			rdb.offset += totalBytes
 			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
@@ -317,18 +334,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte("-ERR unsupported CONFIG parameter\r\n")
 		}
 	case "keys":
-		rdbfile, err := readRDBFile(*dir, *dbFileName)
-		if err != nil {
-			res = []byte("-ERR error reading RDB file\r\n")
-		} else {
-			keys := make([]string, 0)
-			for k := range rdbfile.data {
-				keys = append(keys, k)
-			}
-			res = []byte(fmt.Sprintf("*%d\r\n", len(keys)))
-			for _, k := range keys {
-				res = append(res, fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)...)
-			}
+		keys := make([]string, 0)
+		for k := range rdb.rdbFile.data {
+			keys = append(keys, k)
+		}
+		res = []byte(fmt.Sprintf("*%d\r\n", len(keys)))
+		for _, k := range keys {
+			res = append(res, fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)...)
 		}
 	case "type":
 		_, ok := rdb.getValue(args[0])

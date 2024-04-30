@@ -216,6 +216,7 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	var rdbfile rdbFile
 	rdbfile.data = make(map[string]string)
 	for i := 0; i < len(keys); i++ {
+		// check if value type is string
 		if keys[i] == 0 {
 			keyLength := int(keys[i+1])
 			if keyLength == 0 {
