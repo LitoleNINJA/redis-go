@@ -54,7 +54,7 @@ type rdbFile struct {
 }
 
 type redisStream struct {
-	data      map[string]redisStreamEntry
+	data      map[string][]redisStreamEntry
 	streamIds map[string]int
 }
 
@@ -132,7 +132,7 @@ var rdb = redisDB{
 	ackCnt:      0,
 	ackChan:     make(chan struct{}, 10),
 	rdbFile:     rdbFile{data: make(map[string]redisValue)},
-	redisStream: redisStream{data: make(map[string]redisStreamEntry), streamIds: make(map[string]int)},
+	redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -402,13 +402,57 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			fields[args[i]] = args[i+1]
 		}
 
-		rdb.redisStream.data[key] = redisStreamEntry{id: id, fields: fields}
+		rdb.redisStream.data[key] = append(rdb.redisStream.data[key], redisStreamEntry{id: id, fields: fields})
 		parts := strings.Split(id, "-")
 		val, _ := strconv.Atoi(parts[1])
 		rdb.redisStream.streamIds[parts[0]] = val
 		fmt.Printf("Added stream entry: %s, %s\n", key, id)
 		rdb.setValue(key, id, "stream", time.Now().UnixMilli(), 0)
 		res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(id), id))
+	case "xrange":
+		key := args[0]
+		start := args[1]
+		end := args[2]
+		var startVal string
+		var startSeq int
+		var endVal string
+		var endSeq int
+		if strings.Contains(start, "-") {
+			parts := strings.Split(start, "-")
+			startVal = parts[0]
+			startSeq, _ = strconv.Atoi(parts[1])
+		} else {
+			startVal = start
+			startSeq = 0
+		}
+		if strings.Contains(end, "-") {
+			parts := strings.Split(end, "-")
+			endVal = parts[0]
+			endSeq, _ = strconv.Atoi(parts[1])
+		} else {
+			endVal = end
+			endSeq = 0
+		}
+
+		entries := make([]redisStreamEntry, 0)
+		for _, v := range rdb.redisStream.data[key] {
+			parts := strings.Split(v.id, "-")
+			val, _ := strconv.Atoi(parts[1])
+			if (parts[0] > startVal || (parts[0] == startVal && val >= startSeq)) && (parts[0] < endVal || (parts[0] == endVal && val <= endSeq)) {
+				entries = append(entries, v)
+			}
+		}
+		fmt.Println("Stream entries: ", entries)
+
+		resString := fmt.Sprintf("*%d\r\n", len(entries))
+		for _, entry := range entries {
+			resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
+			for k, v := range entry.fields {
+				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+			}
+		}
+		fmt.Printf("Stream entries: %s\n", resString)
+		res = []byte(resString)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
