@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -215,7 +217,8 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	keys = keys[2:]
 
 	var rdbfile rdbFile
-	rdbfile.data = make(map[string]string)
+	rdbfile.data = make(map[string]redisValue)
+	var exp int64 = 0
 	for i := 0; i < len(keys); {
 		// check if value type is string
 		if keys[i] == 0 {
@@ -230,7 +233,20 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 			value := string(keys[i+1 : i+1+valLength])
 			i += 1 + valLength
 
-			rdbfile.data[key] = value
+			if exp == 0 {
+				rdbfile.data[key] = redisValue{value: value, createdAt: time.Now().UnixMilli(), expiry: 0}
+			} else {
+				rdbfile.data[key] = redisValue{value: value, createdAt: exp, expiry: 1}
+			}
+			exp = 0
+		} else if keys[i] == 252 {
+			t := keys[i+1 : i+9]
+			exp = int64(binary.LittleEndian.Uint64(t))
+			i += 9
+		} else if keys[i] == 253 {
+			t := keys[i+1 : i+5]
+			exp = int64(binary.LittleEndian.Uint32(t)) * 1000
+			i += 5
 		} else {
 			i++
 		}
