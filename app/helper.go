@@ -311,6 +311,10 @@ func handleBlockXRead(args []string, conn net.Conn) {
 		retryCount = 50
 	}
 
+	if args[3] == "$" {
+		args[3] = lastStreamID
+	}
+
 	var res []byte
 	for i := 0; i < retryCount; i++ {
 		entries := handleXRead(args[2:])
