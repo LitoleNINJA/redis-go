@@ -457,43 +457,23 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		}
 		res = []byte(resString)
 	case "xread":
-		pos := 1
-		for i := 1; i < len(args); i++ {
-			if strings.Contains(args[i], "-") {
-				pos = i
-				break
-			}
-		}
-		keys := args[1:pos]
-		ids := args[pos:]
-		fmt.Println("Keys: ", keys, " IDs: ", ids)
-		entries := make([]struct {
-			key   string
-			entry []redisStreamEntry
-		}, 0)
-		for i := 0; i < len(keys); i++ {
-			for _, v := range rdb.redisStream.data[keys[i]] {
-				if v.id >= ids[i] {
-					entries = append(entries, struct {
-						key   string
-						entry []redisStreamEntry
-					}{key: keys[i], entry: []redisStreamEntry{v}})
+		if args[0] == "streams" {
+			entries := handleXRead(args[1:])
+			res := fmt.Sprintf("*%d\r\n", len(entries))
+			for _, entry := range entries {
+				res += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
+				for _, entry := range entry.entry {
+					res += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
+					for k, v := range entry.fields {
+						res += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+					}
 				}
 			}
+			return []byte(res)
+		} else if args[0] == "block" {
+			go handleBlockXRead(args[1:], conn)
+			res = []byte("")
 		}
-		fmt.Println("Entries: ", entries)
-		respString := fmt.Sprintf("*%d\r\n", len(entries))
-		for _, entry := range entries {
-			respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
-			for _, entry := range entry.entry {
-				respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
-				for k, v := range entry.fields {
-					respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
-				}
-			}
-		}
-		fmt.Println("Response: ", respString)
-		res = []byte(respString)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {

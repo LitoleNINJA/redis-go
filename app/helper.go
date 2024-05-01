@@ -264,3 +264,65 @@ func validateStreamID(id string) string {
 	}
 	return ""
 }
+
+// handle non-blocking XADD command
+func handleXRead(args []string) []struct {
+	key   string
+	entry []redisStreamEntry
+} {
+	pos := 1
+	for i := 0; i < len(args); i++ {
+		if strings.Contains(args[i], "-") {
+			pos = i
+			break
+		}
+	}
+	keys := args[:pos]
+	ids := args[pos:]
+	fmt.Println("Keys: ", keys, " IDs: ", ids)
+	entries := make([]struct {
+		key   string
+		entry []redisStreamEntry
+	}, 0)
+	for i := 0; i < len(keys); i++ {
+		for _, v := range rdb.redisStream.data[keys[i]] {
+			if v.id > ids[i] {
+				entries = append(entries, struct {
+					key   string
+					entry []redisStreamEntry
+				}{key: keys[i], entry: []redisStreamEntry{v}})
+			}
+		}
+	}
+
+	fmt.Println("Entries: ", entries)
+	return entries
+}
+
+// handle block XREAD command
+func handleBlockXRead(args []string, conn net.Conn) {
+	duration, _ := strconv.Atoi(args[0])
+	fmt.Println("Blocking XREAD for ", duration, "ms")
+	time.Sleep(time.Millisecond * time.Duration(duration))
+
+	entries := handleXRead(args[2:])
+	var res []byte
+	if len(entries) > 0 {
+		resString := fmt.Sprintf("*%d\r\n", len(entries))
+		for _, entry := range entries {
+			resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
+			for _, entry := range entry.entry {
+				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
+				for k, v := range entry.fields {
+					resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+				}
+			}
+		}
+		res = []byte(resString)
+	} else {
+		res = []byte("$-1\r\n")
+	}
+
+	fmt.Printf("Sent: %s\n", printCommand(res))
+	conn.Write(res)
+}
