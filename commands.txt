@@ -10,6 +10,7 @@ Redis Commands
 *2\r\n$4\r\ntype\r\n$3\r\nfoo\r\n					                                TYPE foo
 *5\r\n$4\r\nxadd\r\n$10\r\nstream_key\r\n$3\r\n0-3\r\n$3\r\nfoo\r\n$3\r\nbar\r\n    XADD stream_key 1-* foo bar
 *4\r\n$6\r\nxrange\r\n$10\r\nstream_key\r\n$3\r\n0-2\r\n$3\r\n0-3\r\n               XRANGE stream_key 0-2 0-3
+*4\r\n$5\r\nxread\r\n$7\r\nstreams\r\n$10\r\nstream_key\r\n$3\r\n0-3\r\n            XREAD streams stream_key 0-3
 
 
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\n123\r\n*3\r\n$3\r\nset\r\n$3\r\nbar\r\n$3\r\n456\r\n*3\r\n$3\r\nset\r\n$3\r\nbaz\r\n$3\r\n789\r\n

@@ -456,6 +456,26 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			}
 		}
 		res = []byte(resString)
+	case "xread":
+		key := args[1]
+		id := args[2]
+		entries := make([]redisStreamEntry, 0)
+		for _, v := range rdb.redisStream.data[key] {
+			if v.id >= id {
+				entries = append(entries, v)
+			}
+		}
+		fmt.Println("Entries: ", entries)
+		respString := "*1\r\n"
+		respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(key), key)
+		for _, entry := range entries {
+			respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
+			for k, v := range entry.fields {
+				respString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+			}
+		}
+		fmt.Println("Response: ", respString)
+		res = []byte(respString)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
