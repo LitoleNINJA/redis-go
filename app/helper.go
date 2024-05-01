@@ -302,25 +302,35 @@ func handleXRead(args []string) []struct {
 // handle block XREAD command
 func handleBlockXRead(args []string, conn net.Conn) {
 	duration, _ := strconv.Atoi(args[0])
-	fmt.Println("Blocking XREAD for ", duration, "ms")
-	time.Sleep(time.Millisecond * time.Duration(duration))
+	retryCount := 1
+	if duration != 0 {
+		fmt.Println("Blocking XREAD for ", duration, "ms")
+		time.Sleep(time.Millisecond * time.Duration(duration))
+	} else {
+		fmt.Println("Blocking XREAD till new data arrives")
+		retryCount = 50
+	}
 
-	entries := handleXRead(args[2:])
 	var res []byte
-	if len(entries) > 0 {
-		resString := fmt.Sprintf("*%d\r\n", len(entries))
-		for _, entry := range entries {
-			resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
-			for _, entry := range entry.entry {
-				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
-				for k, v := range entry.fields {
-					resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+	for i := 0; i < retryCount; i++ {
+		entries := handleXRead(args[2:])
+		if len(entries) > 0 {
+			resString := fmt.Sprintf("*%d\r\n", len(entries))
+			for _, entry := range entries {
+				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
+				for _, entry := range entry.entry {
+					resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
+					for k, v := range entry.fields {
+						resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+					}
 				}
 			}
+			res = []byte(resString)
+			break
+		} else {
+			res = []byte("$-1\r\n")
 		}
-		res = []byte(resString)
-	} else {
-		res = []byte("$-1\r\n")
+		time.Sleep(time.Millisecond * 100)
 	}
 
 	fmt.Printf("Sent: %s\n", printCommand(res))
