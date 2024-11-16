@@ -367,7 +367,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		}
 		if val.valType != "int" {
 			fmt.Printf("Can not increment value of type : %s", val.valType)
-			res = []byte("$-1\r\n")
+			res = []byte("-ERR value is not an integer or out of range\r\n")
 			break
 		}
 
