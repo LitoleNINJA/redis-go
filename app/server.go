@@ -377,6 +377,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		setKeyValue(args[0], stringVal, 0, totalBytes)
 
 		res = []byte(":" + stringVal + "\r\n")
+	case "multi":
+		res = []byte("+OK\r\n")
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
@@ -389,28 +391,6 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	if rdb.role == "slave" && handshakeComplete {
 		rdb.offset += totalBytes
 		fmt.Printf("\nCmd: %s,  Current Bytes: %d,  Bytes processed: %d\n", cmd, totalBytes, rdb.offset)
-	}
-
-	return res
-}
-
-func setKeyValue(key string, value string, exp int64, totalBytes int) []byte {
-	var res []byte
-
-	valueType := "string"
-	// check if value is int
-	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
-		valueType = "int"
-	}
-
-	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
-	if rdb.role == "master" {
-		rdb.offset += totalBytes
-		res = []byte("+OK\r\n")
-		migrateToSlaves(key, value)
-	} else {
-		fmt.Println("Slave received set command: ", key, value, exp)
-		res = []byte("")
 	}
 
 	return res
