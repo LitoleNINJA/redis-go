@@ -30,6 +30,7 @@ type redisDB struct {
 	ackChan     chan struct{}
 	rdbFile     rdbFile
 	redisStream redisStream
+	multi       bool
 }
 
 type redisValue struct {
@@ -116,4 +117,10 @@ func (rdb *redisDB) setAckCnt(cnt int) {
 	rdb.mux.Lock()
 	defer rdb.mux.Unlock()
 	rdb.ackCnt = cnt
+}
+
+func (rdb *redisDB) setMulti(value bool) {
+	rdb.mux.Lock()
+	rdb.multi = value
+	rdb.mux.Unlock()
 }

@@ -378,7 +378,12 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 
 		res = []byte(":" + stringVal + "\r\n")
 	case "multi":
+		rdb.setMulti(true)
 		res = []byte("+OK\r\n")
+	case "exec":
+		if !rdb.multi {
+			res = []byte("-ERR EXEC without MULTI\r\n")
+		}
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
