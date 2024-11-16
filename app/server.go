@@ -12,115 +12,6 @@ import (
 	"time"
 )
 
-// Various RESP kinds
-const (
-	Integer = ':'
-	String  = '+'
-	Bulk    = '$'
-	Array   = '*'
-	Error   = '-'
-)
-
-// RedisDB is a simple in-memory key-value store
-type redisDB struct {
-	data        map[string]redisValue
-	role        string
-	replID      string
-	mux         *sync.Mutex
-	buffer      []string
-	replicas    map[string]net.Conn
-	offset      int
-	ackCnt      int
-	ackChan     chan struct{}
-	rdbFile     rdbFile
-	redisStream redisStream
-}
-
-type redisValue struct {
-	value     string
-	valType   string
-	createdAt int64
-	expiry    int64
-}
-
-type replicationInfo struct {
-	role               string
-	master_replid      string
-	master_repl_offset int
-}
-
-type rdbFile struct {
-	data map[string]redisValue
-}
-
-type redisStream struct {
-	data      map[string][]redisStreamEntry
-	streamIds map[string]int
-}
-
-type redisStreamEntry struct {
-	id     string
-	fields map[string]string
-}
-
-func (rdb *redisDB) setValue(key string, value string, valType string, createdAt int64, expiry int64) {
-	rdb.mux.Lock()
-	rdb.data[key] = redisValue{
-		value:     value,
-		valType:   valType,
-		createdAt: createdAt,
-		expiry:    expiry,
-	}
-	rdb.mux.Unlock()
-}
-
-func (rdb *redisDB) getValue(key string) (string, bool) {
-	val, ok := rdb.data[key]
-	if !ok {
-		fmt.Println("Key not found: ", key)
-		return "$-1\r\n", false
-	}
-	timeElapsed := time.Now().UnixMilli() - val.createdAt
-	fmt.Println("Data for key: ", key, timeElapsed, val.createdAt, val.expiry)
-	if val.expiry > 0 && timeElapsed > val.expiry {
-		fmt.Println("Key expired: ", key)
-		delete(rdb.data, key)
-		return "$-1\r\n", false
-	}
-	return val.value, true
-}
-
-func (info *replicationInfo) infoResp() []byte {
-	l1 := "role:" + info.role
-	l2 := "master_replid:" + info.master_replid
-	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
-	resp := fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3)
-	fmt.Println("InfoResponse: ", resp)
-
-	resp = fmt.Sprintf("$%d\r\n%s\r\n", len(resp), resp)
-	resp = fmt.Sprintf("$%d%s%s%s", len(resp), "\r\n", resp, "\r\n")
-	return []byte(resp)
-}
-
-func (rdb *redisDB) incrementACK() {
-	rdb.mux.Lock()
-	rdb.ackCnt++
-	rdb.mux.Unlock()
-	rdb.ackChan <- struct{}{}
-}
-
-func (rdb *redisDB) getAckCnt() int {
-	rdb.mux.Lock()
-	defer rdb.mux.Unlock()
-	return rdb.ackCnt
-}
-
-func (rdb *redisDB) setAckCnt(cnt int) {
-	rdb.mux.Lock()
-	defer rdb.mux.Unlock()
-	rdb.ackCnt = cnt
-}
-
 var rdb = redisDB{
 	data:        make(map[string]redisValue),
 	role:        "master",
@@ -251,22 +142,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			exp, _ = strconv.ParseInt(args[3], 10, 64)
 		}
 
-		rdb.setValue(args[0], args[1], "string", time.Now().UnixMilli(), exp)
-		if rdb.role == "master" {
-			rdb.offset += totalBytes
-			fmt.Printf("Set key: %s, value: %s, expiry: %d\n", args[0], args[1], exp)
-			res = []byte("+OK\r\n")
-			migrateToSlaves(args[0], args[1])
-		} else {
-			fmt.Println("Slave received set command: ", args[0], args[1], exp)
-			res = []byte("")
-		}
+		res = setKeyValue(args[0], args[1], exp, totalBytes)
 	case "get":
-		val, ok := rdb.getValue(args[0])
-		if !ok {
-			res = []byte(val)
+		val, err := rdb.getValue(args[0])
+		if err != "" {
+			res = []byte(err)
 		} else {
-			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val), val))
+			res = []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val.value), val.value))
 		}
 	case "info":
 		var info replicationInfo
@@ -474,6 +356,25 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			go handleBlockXRead(args[1:], conn)
 			res = []byte("")
 		}
+	case "incr":
+		val, err := rdb.getValue(args[0])
+		if err != "" {
+			fmt.Printf("%s : value not found !", args[0])
+			res = []byte(err)
+			break
+		}
+		if val.valType != "int" {
+			fmt.Printf("Can not increment value of type : %s", val.valType)
+			res = []byte("$-1\r\n")
+			break
+		}
+
+		intVal, _ := strconv.ParseInt(val.value, 10, 64)
+		intVal++
+		stringVal := strconv.FormatInt(intVal, 10)
+		setKeyValue(args[0], stringVal, 0, totalBytes)
+
+		res = []byte(":" + stringVal + "\r\n")
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
@@ -486,6 +387,28 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	if rdb.role == "slave" && handshakeComplete {
 		rdb.offset += totalBytes
 		fmt.Printf("\nCmd: %s,  Current Bytes: %d,  Bytes processed: %d\n", cmd, totalBytes, rdb.offset)
+	}
+
+	return res
+}
+
+func setKeyValue(key string, value string, exp int64, totalBytes int) []byte {
+	var res []byte
+
+	valueType := "string"
+	// check if value is int
+	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
+		valueType = "int"
+	}
+
+	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
+	if rdb.role == "master" {
+		rdb.offset += totalBytes
+		res = []byte("+OK\r\n")
+		migrateToSlaves(key, value)
+	} else {
+		fmt.Println("Slave received set command: ", key, value, exp)
+		res = []byte("")
 	}
 
 	return res
