@@ -38,9 +38,10 @@ func main() {
 	flag.Parse()
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--replicaof" && i+2 < len(args) {
-			masterIp = args[i+1]
-			masterPort = args[i+2]
+		if args[i] == "--replicaof" && i+1 < len(args) {
+			IPandPORT := args[i+1]
+			masterIp = strings.Split(IPandPORT, " ")[0]
+			masterPort = strings.Split(IPandPORT, " ")[1]
 			break
 		}
 	}
