@@ -360,8 +360,9 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	case "incr":
 		val, err := rdb.getValue(args[0])
 		if err != "" {
-			fmt.Printf("%s : value not found !", args[0])
-			res = []byte(err)
+			fmt.Printf("%s : value not found !\n", args[0])
+			setKeyValue(args[0], "1", 0, totalBytes)
+			res = []byte(":1\r\n")
 			break
 		}
 		if val.valType != "int" {
