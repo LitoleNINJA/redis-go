@@ -12,6 +12,7 @@ Redis Commands
 *4\r\n$6\r\nxrange\r\n$10\r\nstream_key\r\n$3\r\n0-2\r\n$3\r\n0-3\r\n               XRANGE stream_key 0-2 0-3
 *6\r\n$5\r\nxread\r\n$7\r\nstreams\r\n$10\r\nstream_key\r\n$10\r\nstream_ke2\r\n$3\r\n0-4\r\n$3\r\n0-5\r\n            XREAD streams stream_key 0-3
 *2\r\n$4\r\nincr\r\n$3\r\nfoo\r\n					                                INCR foo
+*1\r\n$%\r\nmulti\r\n                                                               MULTI
 
 
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\n123\r\n*3\r\n$3\r\nset\r\n$3\r\nbar\r\n$3\r\n456\r\n*3\r\n$3\r\nset\r\n$3\r\nbaz\r\n$3\r\n789\r\n

@@ -31,7 +31,7 @@ type redisDB struct {
 	rdbFile     rdbFile
 	redisStream redisStream
 	multi       bool
-	cmdQueue    []string
+	cmdQueue    []redisCommands
 }
 
 type redisValue struct {
@@ -59,6 +59,11 @@ type redisStream struct {
 type redisStreamEntry struct {
 	id     string
 	fields map[string]string
+}
+
+type redisCommands struct {
+	cmd  string
+	args []string
 }
 
 func (rdb *redisDB) setValue(key string, value string, valType string, createdAt int64, expiry int64) {

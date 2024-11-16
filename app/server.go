@@ -25,7 +25,7 @@ var rdb = redisDB{
 	rdbFile:     rdbFile{data: make(map[string]redisValue)},
 	redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
 	multi:       false,
-	cmdQueue:    make([]string, 0),
+	cmdQueue:    make([]redisCommands, 0),
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -128,6 +128,15 @@ func handleConnection(conn net.Conn) {
 
 func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []byte {
 	var res []byte
+
+	if rdb.role == "master" && rdb.multi && cmd != "exec" && cmd != "get" {
+		rdb.cmdQueue = append(rdb.cmdQueue, redisCommands{
+			cmd:  cmd,
+			args: args,
+		})
+		res = []byte("+QUEUED\r\n")
+		return res
+	}
 	switch cmd {
 	case "ping":
 		if rdb.role == "master" {
@@ -391,6 +400,10 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			res = []byte("*0\r\n")
 		}
 
+		// for _, command := range rdb.cmdQueue {
+		// 	curRes := handleCommand(command.cmd, command.args, conn, totalBytes)
+
+		// }
 		rdb.setMulti(false)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
