@@ -31,6 +31,7 @@ type redisDB struct {
 	rdbFile     rdbFile
 	redisStream redisStream
 	multi       bool
+	cmdQueue    []string
 }
 
 type redisValue struct {

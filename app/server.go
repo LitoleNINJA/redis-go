@@ -24,6 +24,8 @@ var rdb = redisDB{
 	ackChan:     make(chan struct{}, 10),
 	rdbFile:     rdbFile{data: make(map[string]redisValue)},
 	redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
+	multi:       false,
+	cmdQueue:    make([]string, 0),
 }
 
 var port = flag.String("port", "6379", "Port to listen on")
@@ -383,7 +385,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	case "exec":
 		if !rdb.multi {
 			res = []byte("-ERR EXEC without MULTI\r\n")
+			break
 		}
+		if len(rdb.cmdQueue) == 0 {
+			res = []byte("*0\r\n")
+		}
+
+		rdb.setMulti(false)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
