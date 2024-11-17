@@ -30,8 +30,14 @@ type redisDB struct {
 	ackChan     chan struct{}
 	rdbFile     rdbFile
 	redisStream redisStream
-	multi       bool
-	cmdQueue    []redisCommands
+	connStates  map[string]*connectionState
+	stateMux    *sync.RWMutex
+}
+
+// Add new types to track connection state
+type connectionState struct {
+	multi    bool
+	cmdQueue []redisCommands
 }
 
 type redisValue struct {
@@ -123,10 +129,4 @@ func (rdb *redisDB) setAckCnt(cnt int) {
 	rdb.mux.Lock()
 	defer rdb.mux.Unlock()
 	rdb.ackCnt = cnt
-}
-
-func (rdb *redisDB) setMulti(value bool) {
-	rdb.mux.Lock()
-	rdb.multi = value
-	rdb.mux.Unlock()
 }

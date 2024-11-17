@@ -12,22 +12,6 @@ import (
 	"time"
 )
 
-var rdb = redisDB{
-	data:        make(map[string]redisValue),
-	role:        "master",
-	replID:      "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-	mux:         &sync.Mutex{},
-	buffer:      make([]string, 0),
-	replicas:    make(map[string]net.Conn),
-	offset:      0,
-	ackCnt:      0,
-	ackChan:     make(chan struct{}, 10),
-	rdbFile:     rdbFile{data: make(map[string]redisValue)},
-	redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
-	multi:       false,
-	cmdQueue:    make([]redisCommands, 0),
-}
-
 var port = flag.String("port", "6379", "Port to listen on")
 var isReplica = flag.String("replicaof", "", "Replica of")
 var dir = flag.String("dir", "", "Directory to store RDB file")
@@ -46,6 +30,22 @@ func main() {
 			masterPort = strings.Split(IPandPORT, " ")[1]
 			break
 		}
+	}
+
+	var rdb = &redisDB{
+		data:        make(map[string]redisValue),
+		role:        "master",
+		replID:      "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		mux:         &sync.Mutex{},
+		buffer:      make([]string, 0),
+		replicas:    make(map[string]net.Conn),
+		offset:      0,
+		ackCnt:      0,
+		ackChan:     make(chan struct{}, 10),
+		rdbFile:     rdbFile{data: make(map[string]redisValue)},
+		redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
+		connStates:  make(map[string]*connectionState),
+		stateMux:    &sync.RWMutex{},
 	}
 	if *isReplica != "" {
 		rdb.role = "slave"
@@ -80,7 +80,7 @@ func main() {
 			fmt.Println("Error during handshake: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConnection(conn)
+		go handleConnection(conn, rdb)
 	}
 	for {
 		conn, err := l.Accept()
@@ -88,11 +88,17 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go handleConnection(conn)
+
+		go handleConnection(conn, rdb)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, rdb *redisDB) {
+	defer func() {
+		rdb.removeConnState(conn.RemoteAddr().String())
+		conn.Close()
+	}()
+
 	for {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
@@ -102,7 +108,7 @@ func handleConnection(conn net.Conn) {
 		}
 		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
 
-		addCommandToBuffer(string(buf), n)
+		addCommandToBuffer(string(buf), n, rdb)
 
 		for len(rdb.buffer) > 0 {
 			if string(rdb.buffer[0][0]) != "*" {
@@ -112,7 +118,7 @@ func handleConnection(conn net.Conn) {
 			cmd, args, totalBytes := parseCommand(rdb.buffer[0])
 			rdb.buffer = rdb.buffer[1:]
 
-			res := handleCommand(cmd, args, conn, totalBytes)
+			res := handleCommand(cmd, args, conn, totalBytes, rdb)
 
 			if len(res) > 0 {
 				_, err = conn.Write(res)
@@ -126,11 +132,13 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []byte {
+func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb *redisDB) []byte {
 	var res []byte
+	connAddr := conn.RemoteAddr().String()
+	connState := rdb.getConnState(connAddr)
 
-	if rdb.role == "master" && rdb.multi && cmd != "exec" && cmd != "get" {
-		rdb.cmdQueue = append(rdb.cmdQueue, redisCommands{
+	if rdb.role == "master" && connState.multi && cmd != "multi" && cmd != "exec" {
+		connState.cmdQueue = append(connState.cmdQueue, redisCommands{
 			cmd:  cmd,
 			args: args,
 		})
@@ -154,7 +162,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			exp, _ = strconv.ParseInt(args[3], 10, 64)
 		}
 
-		res = setKeyValue(args[0], args[1], exp, totalBytes)
+		res = setKeyValue(args[0], args[1], exp, totalBytes, rdb)
 	case "get":
 		val, err := rdb.getValue(args[0])
 		if err != "" {
@@ -219,7 +227,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			defer tick.Stop()
 			rdb.setAckCnt(0)
 
-			getACK()
+			getACK(rdb)
 			done := false
 
 			for !done {
@@ -352,7 +360,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		res = []byte(resString)
 	case "xread":
 		if args[0] == "streams" {
-			entries := handleXRead(args[1:])
+			entries := handleXRead(args[1:], rdb)
 			res := fmt.Sprintf("*%d\r\n", len(entries))
 			for _, entry := range entries {
 				res += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
@@ -365,14 +373,14 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 			}
 			return []byte(res)
 		} else if args[0] == "block" {
-			go handleBlockXRead(args[1:], conn)
+			go handleBlockXRead(args[1:], conn, rdb)
 			res = []byte("")
 		}
 	case "incr":
 		val, err := rdb.getValue(args[0])
 		if err != "" {
 			fmt.Printf("%s : value not found !\n", args[0])
-			setKeyValue(args[0], "1", 0, totalBytes)
+			setKeyValue(args[0], "1", 0, totalBytes, rdb)
 			res = []byte(":1\r\n")
 			break
 		}
@@ -385,26 +393,31 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 		intVal, _ := strconv.ParseInt(val.value, 10, 64)
 		intVal++
 		stringVal := strconv.FormatInt(intVal, 10)
-		setKeyValue(args[0], stringVal, 0, totalBytes)
+		setKeyValue(args[0], stringVal, 0, totalBytes, rdb)
 
 		res = []byte(":" + stringVal + "\r\n")
 	case "multi":
-		rdb.setMulti(true)
+		connState.multi = true
+		connState.cmdQueue = make([]redisCommands, 0)
 		res = []byte("+OK\r\n")
 	case "exec":
-		if !rdb.multi {
+		if !connState.multi {
 			res = []byte("-ERR EXEC without MULTI\r\n")
 			break
 		}
-		if len(rdb.cmdQueue) == 0 {
+		if len(connState.cmdQueue) == 0 {
 			res = []byte("*0\r\n")
 		}
 
-		// for _, command := range rdb.cmdQueue {
-		// 	curRes := handleCommand(command.cmd, command.args, conn, totalBytes)
+		connState.multi = false
+		resString := ""
+		for _, command := range connState.cmdQueue {
+			fmt.Println("\nExecuting cmd : ", command.cmd)
+			curRes := handleCommand(command.cmd, command.args, conn, totalBytes, rdb)
+			resString += string(curRes)
+		}
 
-		// }
-		rdb.setMulti(false)
+		res = []byte("*" + strconv.FormatInt(int64(len(connState.cmdQueue)), 10) + "\r\n" + resString)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
@@ -420,4 +433,28 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int) []b
 	}
 
 	return res
+}
+
+func (rdb *redisDB) getConnState(addr string) *connectionState {
+	rdb.stateMux.RLock()
+	state, exists := rdb.connStates[addr]
+	rdb.stateMux.RUnlock()
+
+	if !exists {
+		rdb.stateMux.Lock()
+		state = &connectionState{
+			multi:    false,
+			cmdQueue: make([]redisCommands, 0),
+		}
+		rdb.connStates[addr] = state
+		rdb.stateMux.Unlock()
+	}
+
+	return state
+}
+
+func (rdb *redisDB) removeConnState(addr string) {
+	rdb.stateMux.Lock()
+	delete(rdb.connStates, addr)
+	rdb.stateMux.Unlock()
 }

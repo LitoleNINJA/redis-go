@@ -12,7 +12,7 @@ import (
 )
 
 // handle multiple commands at once and add them to buffer
-func addCommandToBuffer(buf string, n int) {
+func addCommandToBuffer(buf string, n int, rdb *redisDB) {
 	prev := 0
 	for i := 0; i < n; i++ {
 		if buf[i] == '*' && unicode.IsDigit(rune(buf[i+1])) {
@@ -155,7 +155,7 @@ func sendPSYNC(conn net.Conn, replId string, offset int) error {
 }
 
 // migrate commands to slaves
-func migrateToSlaves(key, value string) {
+func migrateToSlaves(key, value string, rdb *redisDB) {
 	for _, conn := range rdb.replicas {
 		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
 		_, err := conn.Write(res)
@@ -167,7 +167,7 @@ func migrateToSlaves(key, value string) {
 }
 
 // ask for ACK from slaves (for debugging)
-func getACK() {
+func getACK(rdb *redisDB) {
 	for _, conn := range rdb.replicas {
 		res := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
 		_, err := conn.Write(res)
@@ -266,7 +266,7 @@ func validateStreamID(id string) string {
 }
 
 // handle non-blocking XADD command
-func handleXRead(args []string) []struct {
+func handleXRead(args []string, rdb *redisDB) []struct {
 	key   string
 	entry []redisStreamEntry
 } {
@@ -300,7 +300,7 @@ func handleXRead(args []string) []struct {
 }
 
 // handle block XREAD command
-func handleBlockXRead(args []string, conn net.Conn) {
+func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
 	duration, _ := strconv.Atoi(args[0])
 	retryCount := 1
 	if duration != 0 {
@@ -317,7 +317,7 @@ func handleBlockXRead(args []string, conn net.Conn) {
 
 	var res []byte
 	for i := 0; i < retryCount; i++ {
-		entries := handleXRead(args[2:])
+		entries := handleXRead(args[2:], rdb)
 		if len(entries) > 0 {
 			resString := fmt.Sprintf("*%d\r\n", len(entries))
 			for _, entry := range entries {
@@ -342,7 +342,7 @@ func handleBlockXRead(args []string, conn net.Conn) {
 }
 
 // set (key, value) in rdb with proper type
-func setKeyValue(key string, value string, exp int64, totalBytes int) []byte {
+func setKeyValue(key string, value string, exp int64, totalBytes int, rdb *redisDB) []byte {
 	var res []byte
 
 	valueType := "string"
@@ -355,7 +355,7 @@ func setKeyValue(key string, value string, exp int64, totalBytes int) []byte {
 	if rdb.role == "master" {
 		rdb.offset += totalBytes
 		res = []byte("+OK\r\n")
-		migrateToSlaves(key, value)
+		migrateToSlaves(key, value, rdb)
 	} else {
 		fmt.Println("Slave received set command: ", key, value, exp)
 		res = []byte("")
