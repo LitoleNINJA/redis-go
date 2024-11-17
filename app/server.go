@@ -137,7 +137,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	connAddr := conn.RemoteAddr().String()
 	connState := rdb.getConnState(connAddr)
 
-	if rdb.role == "master" && connState.multi && cmd != "multi" && cmd != "exec" {
+	// queue commands if multi is set
+	if rdb.role == "master" && connState.multi && cmd != "multi" && cmd != "exec" && cmd != "discard" {
 		connState.cmdQueue = append(connState.cmdQueue, redisCommands{
 			cmd:  cmd,
 			args: args,
@@ -418,6 +419,15 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		}
 
 		res = []byte("*" + strconv.FormatInt(int64(len(connState.cmdQueue)), 10) + "\r\n" + resString)
+	case "discard":
+		if !connState.multi {
+			res = []byte("-ERR DISCARD without MULTI\r\n")
+			break
+		}
+
+		connState.multi = false
+		connState.cmdQueue = make([]redisCommands, 0)
+		res = []byte("+OK\r\n")
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		if rdb.role == "master" {
