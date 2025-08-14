@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -240,11 +241,55 @@ func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	}
 
 	fmt.Printf("Read RDB file: %d bytes\n", n)
-	return parseRDBFile(buf[:n])
+	
+	var rdb rdbFile
+	if len(buf) < 9 || string(buf[:5]) != "REDIS" {
+		return rdb, fmt.Errorf("invalid RDB file format")
+	}
+	buf = buf[9:] // Skip the first 9 bytes (MAGIC + VERSION)
+
+	reader := bytes.NewReader(buf)
+	err = parseRDBFile(reader, &rdb)
+	if err != nil {
+		return rdb, err
+	}
+
+	return rdb, nil
 }
 
-func parseRDBFile(buf []byte) (rdbFile, error) {
-	return rdbFile{}, nil
+func parseRDBFile(reader *bytes.Reader, rdb *rdbFile) error {
+	n, err := reader.ReadByte()
+	if err != nil {
+		return fmt.Errorf("error reading RDB file: %v", err)
+	}
+
+	switch n {
+	case RDBAux:
+		_, err = readEncodedString(reader)
+
+	}
+
+	return nil
+}
+
+func readEncodedString(reader *bytes.Reader) ([]byte, error) {
+	length, err := reader.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("error reading run length: %v", err)
+	}
+
+	if length == 0 {
+		fmt.Println("Run length is zero, returning empty slice")
+		return []byte{}, nil
+	}
+
+	data := make([]byte, length)
+	_, err = reader.Read(data)
+	if err != nil {
+		return nil, fmt.Errorf("error reading run length data: %v", err)
+	}		
+
+	return data, nil
 }
 
 func createRedisValue(value string, expiry int64) redisValue {
