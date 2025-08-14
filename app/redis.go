@@ -8,16 +8,18 @@ import (
 	"time"
 )
 
-// Various RESP kinds
 const (
-	Integer = ':'
-	String  = '+'
-	Bulk    = '$'
-	Array   = '*'
-	Error   = '-'
+	RESPInteger = ':'
+	RESPString  = '+'
+	RESPBulk    = '$'
+	RESPArray   = '*'
+	RESPError   = '-'
 )
 
-// RedisDB is a simple in-memory key-value store
+const (
+	KeyNotFoundResponse = "$-1\r\n"
+)
+
 type redisDB struct {
 	data        map[string]redisValue
 	role        string
@@ -34,7 +36,6 @@ type redisDB struct {
 	stateMux    *sync.RWMutex
 }
 
-// Add new types to track connection state
 type connectionState struct {
 	multi    bool
 	cmdQueue []redisCommands
@@ -75,41 +76,62 @@ type redisCommands struct {
 func (rdb *redisDB) setValue(key string, value string, valType string, createdAt int64, expiry int64) {
 	fmt.Printf("Set key: %s, value: %s, expiry: %d\n", key, value, expiry)
 	rdb.mux.Lock()
+	defer rdb.mux.Unlock()
+
 	rdb.data[key] = redisValue{
 		value:     value,
 		valType:   valType,
 		createdAt: createdAt,
 		expiry:    expiry,
 	}
-	rdb.mux.Unlock()
 }
 
 func (rdb *redisDB) getValue(key string) (redisValue, string) {
-	val, ok := rdb.data[key]
-	if !ok {
+	rdb.mux.Lock()
+	defer rdb.mux.Unlock()
+
+	val, exists := rdb.data[key]
+	if !exists {
 		fmt.Println("Key not found: ", key)
-		return redisValue{}, "$-1\r\n"
+		return redisValue{}, KeyNotFoundResponse
 	}
-	timeElapsed := time.Now().UnixMilli() - val.createdAt
-	fmt.Printf("GET for key %s, Value : %s, Type : %s, TimeElapsed : %d, CreatedAt : %d, Expiry : %d\n", key, val.value, val.valType, timeElapsed, val.createdAt, val.expiry)
-	if val.expiry > 0 && timeElapsed > val.expiry {
+
+	if rdb.isExpired(val) {
 		fmt.Println("Key expired: ", key)
 		delete(rdb.data, key)
-		return redisValue{}, "$-1\r\n"
+		return redisValue{}, KeyNotFoundResponse
 	}
+
+	rdb.logGetOperation(key, val)
 	return val, ""
 }
 
-func (info *replicationInfo) infoResp() []byte {
-	l1 := "role:" + info.role
-	l2 := "master_replid:" + info.master_replid
-	l3 := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
-	resp := fmt.Sprintf("$%d\r\n%s\r\n", len(l1)+len(l2)+len(l3), l1+"\r\n"+l2+"\r\n"+l3)
-	fmt.Println("InfoResponse: ", resp)
+func (rdb *redisDB) isExpired(val redisValue) bool {
+	if val.expiry <= 0 {
+		return false
+	}
+	timeElapsed := time.Now().UnixMilli() - val.createdAt
+	return timeElapsed > val.expiry
+}
 
-	resp = fmt.Sprintf("$%d\r\n%s\r\n", len(resp), resp)
-	resp = fmt.Sprintf("$%d%s%s%s", len(resp), "\r\n", resp, "\r\n")
-	return []byte(resp)
+func (rdb *redisDB) logGetOperation(key string, val redisValue) {
+	timeElapsed := time.Now().UnixMilli() - val.createdAt
+	fmt.Printf("GET for key %s, Value: %s, Type: %s, TimeElapsed: %d, CreatedAt: %d, Expiry: %d\n",
+		key, val.value, val.valType, timeElapsed, val.createdAt, val.expiry)
+}
+
+func (info *replicationInfo) infoResp() []byte {
+	roleInfo := "role:" + info.role
+	replIDInfo := "master_replid:" + info.master_replid
+	offsetInfo := "master_repl_offset:" + strconv.Itoa(info.master_repl_offset)
+
+	content := roleInfo + "\r\n" + replIDInfo + "\r\n" + offsetInfo
+	response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), content)
+	fmt.Println("InfoResponse: ", response)
+
+	finalResponse := fmt.Sprintf("$%d\r\n%s\r\n", len(response), response)
+	finalResponse = fmt.Sprintf("$%d%s%s%s", len(finalResponse), "\r\n", finalResponse, "\r\n")
+	return []byte(finalResponse)
 }
 
 func (rdb *redisDB) incrementACK() {

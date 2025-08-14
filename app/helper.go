@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -11,18 +10,56 @@ import (
 	"unicode"
 )
 
-// handle multiple commands at once and add them to buffer
+const (
+	BufferSize        = 1024
+	RetryInterval     = 100 * time.Millisecond
+	DefaultRetryCount = 50
+	RDBBufferSize     = 4096
+)
+
+const (
+	// Value types
+	RDBStringType   = 0
+	RDBListType     = 1
+	RDBSetType      = 2
+	RDBZSetType     = 3
+	RDBHashType     = 4
+	RDBZipMapType   = 9
+	RDBZipListType  = 10
+	RDBIntSetType   = 11
+	RDBSortedSetZip = 12
+	RDBHashMapZip   = 13
+	RDBListQuick    = 14
+
+	// Special types
+	RDBExpireMS      = 252 // FC
+	RDBExpireSeconds = 253 // FD
+	RDBSelectDB      = 254 // FE
+	RDBEOF           = 255 // FF
+
+	// Auxiliary field
+	RDBAux = 250 // FA
+
+	// Resizedb
+	RDBResizeDB = 251 // FB
+)
+
+type XReadEntry struct {
+	key   string
+	entry []redisStreamEntry
+}
+
 func addCommandToBuffer(buf string, n int, rdb *redisDB) {
 	prev := 0
 	for i := 0; i < n; i++ {
 		if buf[i] == '*' && unicode.IsDigit(rune(buf[i+1])) {
 			str := buf[prev:i]
 			if len(str) > 1 && str[0] != '*' {
-				a := strings.Split(str, "$")
-				a[1] = "$" + a[1]
-				for _, s := range a {
-					if len(s) > 0 {
-						rdb.buffer = append(rdb.buffer, s)
+				parts := strings.Split(str, "$")
+				parts[1] = "$" + parts[1]
+				for _, part := range parts {
+					if len(part) > 0 {
+						rdb.buffer = append(rdb.buffer, part)
 					}
 				}
 			} else if len(str) > 1 {
@@ -35,62 +72,58 @@ func addCommandToBuffer(buf string, n int, rdb *redisDB) {
 	fmt.Printf("Buffer: %s\n", printCommand([]byte(strings.Join(rdb.buffer, ", "))))
 }
 
-// parse command from buffer and return command and args
 func parseCommand(buf string) (string, []string, int) {
-	a := strings.Split(buf, "\r\n")
-	// for local testing
-	if len(a) == 1 {
-		a = strings.Split(buf, "\\r\\n")
+	parts := strings.Split(buf, "\r\n")
+	if len(parts) == 1 {
+		parts = strings.Split(buf, "\\r\\n")
 	}
-	n, _ := strconv.ParseInt(string(a[0][1]), 10, 64)
+
+	argCount, _ := strconv.ParseInt(string(parts[0][1]), 10, 64)
 
 	var cmd string
 	args := make([]string, 0)
-	for i := 0; i < int(n); i++ {
+
+	for i := 0; i < int(argCount); i++ {
 		pos := 2*i + 1
-		if len(a[i]) == 0 {
+		if len(parts[i]) == 0 {
 			continue
 		}
-		switch a[pos][0] {
-		case '$':
+		if parts[pos][0] == '$' {
 			if cmd == "" {
-				cmd = strings.ToLower(a[pos+1])
+				cmd = strings.ToLower(parts[pos+1])
 			} else {
-				args = append(args, strings.ToLower(a[pos+1]))
+				args = append(args, strings.ToLower(parts[pos+1]))
 			}
 		}
 	}
+
 	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
 	return cmd, args, len(buf)
 }
 
-// start handshake with master
-func handleHandshake(masterIp, masterPort string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", masterIp+":"+masterPort)
+func handleHandshake(masterIP, masterPort string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", masterIP+":"+masterPort)
 	if err != nil {
 		fmt.Println("Error connecting to master: ", err.Error())
 		return nil, err
 	}
 
-	err = pingMaster(conn)
-	if err != nil {
+	if err := pingMaster(conn); err != nil {
 		fmt.Println("Error pinging master: ", err.Error())
 		return nil, err
 	}
 
-	err = sendREPLConf(conn, "listening-port", *port)
-	if err != nil {
+	if err := sendREPLConf(conn, "listening-port", *port); err != nil {
 		fmt.Println("Error sending REPLCONF 1: ", err.Error())
 		return nil, err
 	}
-	err = sendREPLConf(conn, "capa", "psync2")
-	if err != nil {
+
+	if err := sendREPLConf(conn, "capa", "psync2"); err != nil {
 		fmt.Println("Error sending REPLCONF 2: ", err.Error())
 		return nil, err
 	}
 
-	err = sendPSYNC(conn, "?", -1)
-	if err != nil {
+	if err := sendPSYNC(conn, "?", -1); err != nil {
 		fmt.Println("Error sending PSYNC: ", err.Error())
 		return nil, err
 	}
@@ -98,88 +131,94 @@ func handleHandshake(masterIp, masterPort string) (net.Conn, error) {
 	return conn, nil
 }
 
-// ping master from slave
 func pingMaster(conn net.Conn) error {
-	// ping master
 	_, err := conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
 	if err != nil {
 		fmt.Println("Error writing to master: ", err.Error())
 		return err
 	}
 
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	response, err := readResponse(conn)
 	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
 		return err
 	}
-	fmt.Printf("Received: %s\n", buf[:n])
-	if string(buf[:n]) != "+PONG\r\n" {
-		return fmt.Errorf("master did not respond with PONG: %s", string(buf[:n]))
+
+	fmt.Printf("Received: %s\n", response)
+	if string(response) != "+PONG\r\n" {
+		return fmt.Errorf("master did not respond with PONG: %s", string(response))
 	}
 	return nil
 }
 
-// send REPLCONF to master
 func sendREPLConf(conn net.Conn, cmd, args string) error {
-	// REPLCONF to master
-	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(cmd), cmd, len(args), args)))
+	message := fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(cmd), cmd, len(args), args)
+	_, err := conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error writing to master: ", err.Error())
 		return err
 	}
 
-	buf := make([]byte, 1024)
+	response, err := readResponse(conn)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Received: %s\n", response)
+	if string(response) != "+OK\r\n" {
+		return fmt.Errorf("master did not respond with OK: %s", string(response))
+	}
+	return nil
+}
+
+func sendPSYNC(conn net.Conn, replID string, offset int) error {
+	offsetStr := strconv.Itoa(offset)
+	message := fmt.Sprintf("*3\r\n$5\r\nPSYNC\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(replID), replID, len(offsetStr), offsetStr)
+	_, err := conn.Write([]byte(message))
+	if err != nil {
+		fmt.Println("Error writing to master: ", err.Error())
+		return err
+	}
+	return nil
+}
+
+func readResponse(conn net.Conn) ([]byte, error) {
+	buf := make([]byte, BufferSize)
 	n, err := conn.Read(buf)
 	if err != nil {
 		fmt.Println("Error reading from master: ", err.Error())
-		return err
+		return nil, err
 	}
-	fmt.Printf("Received: %s\n", buf[:n])
-	if string(buf[:n]) != "+OK\r\n" {
-		return fmt.Errorf("master did not respond with OK: %s", string(buf[:n]))
-	}
-	return nil
+	return buf[:n], nil
 }
 
-// send PSYNC to master
-func sendPSYNC(conn net.Conn, replId string, offset int) error {
-	// PSYNC to master
-	offset_str := strconv.Itoa(offset)
-	_, err := conn.Write([]byte(fmt.Sprintf("*3\r\n$5\r\nPSYNC\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(replId), replId, len(offset_str), offset_str)))
-	if err != nil {
-		fmt.Println("Error writing to master: ", err.Error())
-		return err
-	}
-	return nil
-}
-
-// migrate commands to slaves
 func migrateToSlaves(key, value string, rdb *redisDB) {
+	message := fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value)
+	messageBytes := []byte(message)
+
 	for _, conn := range rdb.replicas {
-		res := []byte(fmt.Sprintf("*3\r\n$3\r\nset\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value))
-		_, err := conn.Write(res)
+		_, err := conn.Write(messageBytes)
 		if err != nil {
 			fmt.Println("Error writing to replica: ", err.Error())
+			continue
 		}
-		fmt.Printf("\nSent Migration: %s to %s\n", printCommand(res), conn.RemoteAddr())
+		fmt.Printf("\nSent Migration: %s to %s\n", printCommand(messageBytes), conn.RemoteAddr())
 	}
 }
 
-// ask for ACK from slaves (for debugging)
 func getACK(rdb *redisDB) {
+	ackMessage := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
+
 	for _, conn := range rdb.replicas {
-		res := []byte("*3\r\n$8\r\nreplconf\r\n$6\r\nGETACK\r\n$1\r\n*\r\n")
-		_, err := conn.Write(res)
-		fmt.Printf("Sent: %s\n", printCommand(res))
+		_, err := conn.Write(ackMessage)
 		if err != nil {
 			fmt.Println("Error writing to slave: ", err.Error())
+			continue
 		}
+		fmt.Printf("Sent: %s\n", printCommand(ackMessage))
 		fmt.Printf("\nGet ACK from %s\n", conn.RemoteAddr())
 	}
 }
 
-// print command for debugging
 func printCommand(res []byte) string {
 	cmd := string(res)
 	cmd = strings.ReplaceAll(cmd, "\n", "\\n")
@@ -187,74 +226,42 @@ func printCommand(res []byte) string {
 	return cmd
 }
 
-// read RDB file and return data
 func readRDBFile(dir string, fileName string) (rdbFile, error) {
 	file, err := os.Open(dir + "/" + fileName)
 	if err != nil {
-		fmt.Println("Error opening RDB file: ", err.Error())
 		return rdbFile{}, err
 	}
 	defer file.Close()
 
-	buf := make([]byte, 4096)
+	buf := make([]byte, RDBBufferSize)
 	n, err := file.Read(buf)
 	if err != nil {
-		fmt.Println("Error reading RDB file: ", err.Error())
 		return rdbFile{}, err
 	}
 
-	var keys []byte
-	for i := 0; i < n; i++ {
-		if i+2 < n && buf[i] == 254 && buf[i+1] == 0 && buf[i+2] == 251 {
-			keys = buf[i+3:]
-			break
-		}
-	}
-	if len(keys) == 0 {
-		fmt.Println("No keys found in RDB file")
-		return rdbFile{}, nil
-	}
-	keys = keys[2:]
-
-	var rdbfile rdbFile
-	rdbfile.data = make(map[string]redisValue)
-	var exp int64 = 0
-	for i := 0; i < len(keys); {
-		// check if value type is string
-		if keys[i] == 0 {
-			keyLength := int(keys[i+1])
-			if keyLength == 0 {
-				break
-			}
-			key := string(keys[i+2 : i+2+keyLength])
-			i += 2 + keyLength
-
-			valLength := int(keys[i])
-			value := string(keys[i+1 : i+1+valLength])
-			i += 1 + valLength
-
-			if exp == 0 {
-				rdbfile.data[key] = redisValue{value: value, createdAt: time.Now().UnixMilli(), expiry: 0}
-			} else {
-				rdbfile.data[key] = redisValue{value: value, createdAt: exp, expiry: 1}
-			}
-			exp = 0
-		} else if keys[i] == 252 {
-			t := keys[i+1 : i+9]
-			exp = int64(binary.LittleEndian.Uint64(t))
-			i += 9
-		} else if keys[i] == 253 {
-			t := keys[i+1 : i+5]
-			exp = int64(binary.LittleEndian.Uint32(t)) * 1000
-			i += 5
-		} else {
-			i++
-		}
-	}
-	return rdbfile, nil
+	fmt.Printf("Read RDB file: %d bytes\n", n)
+	return parseRDBFile(buf[:n])
 }
 
-// validate stream ID
+func parseRDBFile(buf []byte) (rdbFile, error) {
+	return rdbFile{}, nil
+}
+
+func createRedisValue(value string, expiry int64) redisValue {
+	if expiry == 0 {
+		return redisValue{
+			value:     value,
+			createdAt: time.Now().UnixMilli(),
+			expiry:    0,
+		}
+	}
+	return redisValue{
+		value:     value,
+		createdAt: expiry,
+		expiry:    1,
+	}
+}
+
 func validateStreamID(id string) string {
 	if id == "0-0" {
 		return "The ID specified in XADD must be greater than 0-0"
@@ -265,33 +272,21 @@ func validateStreamID(id string) string {
 	return ""
 }
 
-// handle non-blocking XADD command
-func handleXRead(args []string, rdb *redisDB) []struct {
-	key   string
-	entry []redisStreamEntry
-} {
-	pos := 1
-	for i := 0; i < len(args); i++ {
-		if strings.Contains(args[i], "-") {
-			pos = i
-			break
-		}
-	}
-	keys := args[:pos]
-	ids := args[pos:]
+func handleXRead(args []string, rdb *redisDB) []XReadEntry {
+	keyEndPos := findKeyEndPosition(args)
+	keys := args[:keyEndPos]
+	ids := args[keyEndPos:]
+
 	fmt.Println("Keys: ", keys, " IDs: ", ids)
-	entries := make([]struct {
-		key   string
-		entry []redisStreamEntry
-	}, 0)
+
+	entries := make([]XReadEntry, 0)
 	for i := 0; i < len(keys); i++ {
-		for _, v := range rdb.redisStream.data[keys[i]] {
-			if v.id > ids[i] {
-				entries = append(entries, struct {
-					key   string
-					entry []redisStreamEntry
-				}{key: keys[i], entry: []redisStreamEntry{v}})
-			}
+		streamEntries := getStreamEntriesAfterID(rdb, keys[i], ids[i])
+		if len(streamEntries) > 0 {
+			entries = append(entries, XReadEntry{
+				key:   keys[i],
+				entry: streamEntries,
+			})
 		}
 	}
 
@@ -299,67 +294,96 @@ func handleXRead(args []string, rdb *redisDB) []struct {
 	return entries
 }
 
-// handle block XREAD command
+func findKeyEndPosition(args []string) int {
+	for i, arg := range args {
+		if strings.Contains(arg, "-") {
+			return i
+		}
+	}
+	return 1
+}
+
+func getStreamEntriesAfterID(rdb *redisDB, key, afterID string) []redisStreamEntry {
+	var entries []redisStreamEntry
+	for _, entry := range rdb.redisStream.data[key] {
+		if entry.id > afterID {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
 func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
 	duration, _ := strconv.Atoi(args[0])
-	retryCount := 1
+	retryCount := calculateRetryCount(duration)
+
 	if duration != 0 {
 		fmt.Println("Blocking XREAD for ", duration, "ms")
 		time.Sleep(time.Millisecond * time.Duration(duration))
 	} else {
 		fmt.Println("Blocking XREAD till new data arrives")
-		retryCount = 50
 	}
 
 	if args[3] == "$" {
 		args[3] = lastStreamID
 	}
 
-	var res []byte
-	for i := 0; i < retryCount; i++ {
-		entries := handleXRead(args[2:], rdb)
-		if len(entries) > 0 {
-			resString := fmt.Sprintf("*%d\r\n", len(entries))
-			for _, entry := range entries {
-				resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
-				for _, entry := range entry.entry {
-					resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.id), entry.id)
-					for k, v := range entry.fields {
-						resString += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
-					}
-				}
-			}
-			res = []byte(resString)
-			break
-		} else {
-			res = []byte("$-1\r\n")
-		}
-		time.Sleep(time.Millisecond * 100)
-	}
-
-	fmt.Printf("Sent: %s\n", printCommand(res))
-	conn.Write(res)
+	response := performBlockingRead(args[2:], retryCount, rdb)
+	fmt.Printf("Sent: %s\n", printCommand(response))
+	conn.Write(response)
 }
 
-// set (key, value) in rdb with proper type
-func setKeyValue(key string, value string, exp int64, totalBytes int, rdb *redisDB) []byte {
-	var res []byte
-
-	valueType := "string"
-	// check if value is int
-	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
-		valueType = "int"
+func calculateRetryCount(duration int) int {
+	if duration != 0 {
+		return 1
 	}
+	return DefaultRetryCount
+}
 
+func performBlockingRead(args []string, retryCount int, rdb *redisDB) []byte {
+	for i := 0; i < retryCount; i++ {
+		entries := handleXRead(args, rdb)
+		if len(entries) > 0 {
+			return buildXReadResponse(entries)
+		}
+		if i < retryCount-1 {
+			time.Sleep(RetryInterval)
+		}
+	}
+	return []byte("$-1\r\n")
+}
+
+func buildXReadResponse(entries []XReadEntry) []byte {
+	response := fmt.Sprintf("*%d\r\n", len(entries))
+	for _, entry := range entries {
+		response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
+		for _, streamEntry := range entry.entry {
+			response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(streamEntry.id), streamEntry.id)
+			for k, v := range streamEntry.fields {
+				response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+			}
+		}
+	}
+	return []byte(response)
+}
+
+func setKeyValue(key string, value string, exp int64, totalBytes int, rdb *redisDB) []byte {
+	valueType := determineValueType(value)
 	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
+
 	if rdb.role == "master" {
 		rdb.offset += totalBytes
-		res = []byte("+OK\r\n")
 		migrateToSlaves(key, value, rdb)
-	} else {
-		fmt.Println("Slave received set command: ", key, value, exp)
-		res = []byte("")
+		return []byte("+OK\r\n")
 	}
 
-	return res
+	fmt.Println("Slave received set command: ", key, value, exp)
+	return []byte("")
+}
+
+func determineValueType(value string) string {
+	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return "int"
+	}
+	return "string"
 }
