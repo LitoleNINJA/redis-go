@@ -545,12 +545,12 @@ func handleLrangeCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	// Handle negative indices
-	// if startIdx < 0 {
-	// 	startIdx = len(list) + startIdx
-	// }
-	// if endIndex < 0 {
-	// 	endIndex = len(list) + endIndex
-	// }
+	if startIdx < 0 {
+		startIdx = len(list) + startIdx
+	}
+	if endIndex < 0 {
+		endIndex = len(list) + endIndex
+	}
 
 	if endIndex >= len(list) {
 		endIndex = len(list) - 1
