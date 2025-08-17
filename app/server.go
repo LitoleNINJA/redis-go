@@ -17,6 +17,9 @@ const (
 	MaxStreamID          = "9999999999999"
 	MaxSequenceID        = 999999999
 	TickerInterval       = 10 * time.Millisecond
+	BufferSize           = 1024
+	RetryInterval        = 100 * time.Millisecond
+	DefaultRetryCount    = 50
 )
 
 var (
@@ -64,19 +67,22 @@ func parseReplicaConfig() (string, string) {
 
 func createRedisDB() *redisDB {
 	return &redisDB{
-		data:        make(map[string]redisValue),
-		role:        "master",
-		replID:      DefaultReplicationID,
-		mux:         &sync.Mutex{},
-		buffer:      make([]string, 0),
-		replicas:    make(map[string]net.Conn),
-		offset:      0,
-		ackCnt:      0,
-		ackChan:     make(chan struct{}, 10),
-		rdbFile:     rdbFile{data: make(map[string]redisValue)},
-		redisStream: redisStream{data: make(map[string][]redisStreamEntry), streamIds: make(map[string]int)},
-		connStates:  make(map[string]*connectionState),
-		stateMux:    &sync.RWMutex{},
+		data:     make(map[string]redisValue),
+		role:     "master",
+		replID:   DefaultReplicationID,
+		mux:      &sync.Mutex{},
+		buffer:   make([]string, 0),
+		replicas: make(map[string]net.Conn),
+		offset:   0,
+		ackCnt:   0,
+		ackChan:  make(chan struct{}, 10),
+		rdbFile:  rdbFile{data: make(map[string]redisValue)},
+		redisStream: redisStream{
+			data:      make(map[string][]redisStreamEntry),
+			streamIds: make(map[string]int),
+		},
+		connStates: make(map[string]*connectionState),
+		stateMux:   &sync.RWMutex{},
 	}
 }
 
@@ -92,16 +98,16 @@ func loadRDBFileIfConfigured(rdb *redisDB) {
 	}
 
 	rdb.rdbFile = rdbFile
-	fmt.Println("RDB file loaded")
+	debug("RDB file loaded")
 
 	for k, v := range rdb.rdbFile.data {
 		rdb.setValue(k, v.value, "string", v.createdAt, v.expiry)
-		fmt.Println("Loaded key: ", k, v.value, time.Now().UnixMilli()-v.createdAt, v.expiry)
+		debug("Loaded key: %s, value: %v, created: %d, expiry: %d", k, v.value, v.createdAt, v.expiry)
 	}
 }
 
 func startServer(role string) net.Listener {
-	listener, err := net.Listen("tcp", ":"+*port)
+	listener, err := net.Listen("tcp", "0.0.0.0:"+*port)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
@@ -186,4 +192,60 @@ func (rdb *redisDB) removeConnState(addr string) {
 	rdb.stateMux.Lock()
 	delete(rdb.connStates, addr)
 	rdb.stateMux.Unlock()
+}
+
+func addCommandToBuffer(buf string, n int, rdb *redisDB) {
+	prev := 0
+	for i := 0; i < n; i++ {
+		if buf[i] == '*' && isDigit(buf[i+1]) {
+			str := buf[prev:i]
+			if len(str) > 1 && str[0] != '*' {
+				parts := strings.Split(str, "$")
+				parts[1] = "$" + parts[1]
+				for _, part := range parts {
+					if len(part) > 0 {
+						rdb.buffer = append(rdb.buffer, part)
+					}
+				}
+			} else if len(str) > 1 {
+				rdb.buffer = append(rdb.buffer, str)
+			}
+			prev = i
+		}
+	}
+	rdb.buffer = append(rdb.buffer, buf[prev:n])
+	fmt.Printf("Buffer: %s\n", printCommand([]byte(strings.Join(rdb.buffer, ", "))))
+}
+
+func parseCommand(buf string) (string, []string, int) {
+	parts := strings.Split(buf, "\r\n")
+	if len(parts) == 1 {
+		parts = strings.Split(buf, "\\r\\n")
+	}
+
+	argCount := int(buf[1] - '0')
+
+	var cmd string
+	args := make([]string, 0)
+
+	for i := 0; i < argCount; i++ {
+		pos := 2*i + 1
+		if len(parts[i]) == 0 {
+			continue
+		}
+		if parts[pos][0] == '$' {
+			if cmd == "" {
+				cmd = strings.ToLower(parts[pos+1])
+			} else {
+				args = append(args, strings.ToLower(parts[pos+1]))
+			}
+		}
+	}
+
+	fmt.Printf("Command: %s, Args: %v\n", cmd, args)
+	return cmd, args, len(buf)
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
 }

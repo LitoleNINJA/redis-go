@@ -14,6 +14,7 @@ Redis Commands
 *2\r\n$4\r\nincr\r\n$3\r\nfoo\r\n					                                INCR foo
 *1\r\n$5\r\nmulti\r\n                                                               MULTI
 *1\r\n$4\r\nexec\r\n                                                                EXEC
+*3\r\n$5\r\nRPUSH\r\n$4\r\npear\r\n$9\r\npineapple\r\n                              RPUSH pear pineapple
 
 
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\n123\r\n*3\r\n$3\r\nset\r\n$3\r\nbar\r\n$3\r\n456\r\n*3\r\n$3\r\nset\r\n$3\r\nbaz\r\n$3\r\n789\r\n
@@ -21,3 +22,5 @@ Redis Commands
 +FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0\r\n$88\r\nREDIS0011\xfa\tredis-ver\x057.2.0\xfa\nredis-bits\xc0@\xfa\x05ctime\xc2m\b\xbce\xfa\bused-mem°\xc4\x10\x00\xfa\baof-base\xc0\x00\xff\xf0n;\xfe\xc0\xffZ\xa2*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n
 
 *5\r\n$4\r\nxadd\r\n$10\r\nstream_key\r\n$3\r\n0-4\r\n$3\r\nfoo\r\n$3\r\nbar\r\n*5\r\n$4\r\nxadd\r\n$10\r\nstream_ke2\r\n$3\r\n0-5\r\n$3\r\nfoo\r\n$3\r\nbar\r\n*6\r\n$5\r\nxread\r\n$7\r\nstreams\r\n$10\r\nstream_key\r\n$10\r\nstream_ke2\r\n$3\r\n0-4\r\n$3\r\n0-5\r\n
+
+*2\r\n$3\r\nget\r\n$3\r\npineapple\r\n

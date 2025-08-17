@@ -42,7 +42,7 @@ type connectionState struct {
 }
 
 type redisValue struct {
-	value     string
+	value     any
 	valType   string
 	createdAt int64
 	expiry    int64
@@ -73,8 +73,8 @@ type redisCommands struct {
 	args []string
 }
 
-func (rdb *redisDB) setValue(key string, value string, valType string, createdAt int64, expiry int64) {
-	fmt.Printf("Set key: %s, value: %s, expiry: %d\n", key, value, expiry)
+func (rdb *redisDB) setValue(key string, value any, valType string, createdAt int64, expiry int64) {
+	debug("Set key: %s, value: %v, expiry: %d\n", key, value, expiry)
 	rdb.mux.Lock()
 	defer rdb.mux.Unlock()
 
@@ -102,7 +102,9 @@ func (rdb *redisDB) getValue(key string) (redisValue, string) {
 		return redisValue{}, KeyNotFoundResponse
 	}
 
-	rdb.logGetOperation(key, val)
+	timeElapsed := time.Now().UnixMilli() - val.createdAt
+	fmt.Printf("GET for key %s, Value: %v, Type: %s, TimeElapsed: %d, CreatedAt: %d, Expiry: %d\n",
+		key, val.value, val.valType, timeElapsed, val.createdAt, val.expiry)
 	return val, ""
 }
 
@@ -112,12 +114,6 @@ func (rdb *redisDB) isExpired(val redisValue) bool {
 	}
 	timeElapsed := time.Now().UnixMilli() - val.createdAt
 	return timeElapsed > val.expiry
-}
-
-func (rdb *redisDB) logGetOperation(key string, val redisValue) {
-	timeElapsed := time.Now().UnixMilli() - val.createdAt
-	fmt.Printf("GET for key %s, Value: %s, Type: %s, TimeElapsed: %d, CreatedAt: %d, Expiry: %d\n",
-		key, val.value, val.valType, timeElapsed, val.createdAt, val.expiry)
 }
 
 func (info *replicationInfo) infoResp() []byte {

@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type XReadEntry struct {
+	key   string
+	entry []redisStreamEntry
+}
+
 func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb *redisDB) []byte {
 	connAddr := conn.RemoteAddr().String()
 	connState := rdb.getConnState(connAddr)
@@ -58,6 +63,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleExecCommand(connState, conn, totalBytes, rdb)
 	case "discard":
 		response = handleDiscardCommand(connState)
+	case "rpush":
+		response = handleRpushCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -92,7 +99,8 @@ func handleGetCommand(args []string, rdb *redisDB) []byte {
 	if err != "" {
 		return []byte(err)
 	}
-	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(val.value), val.value))
+	valueStr := fmt.Sprintf("%v", val.value)
+	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(valueStr), valueStr))
 }
 
 func handleInfoCommand(rdb *redisDB) []byte {
@@ -259,7 +267,8 @@ func handleIncrCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		return []byte("-ERR value is not an integer or out of range\r\n")
 	}
 
-	intVal, _ := strconv.ParseInt(val.value, 10, 64)
+	valueStr := fmt.Sprintf("%v", val.value)
+	intVal, _ := strconv.ParseInt(valueStr, 10, 64)
 	intVal++
 	stringVal := strconv.FormatInt(intVal, 10)
 	setKeyValue(args[0], stringVal, 0, totalBytes, rdb)
@@ -277,6 +286,7 @@ func handleExecCommand(connState *connectionState, conn net.Conn, totalBytes int
 		return []byte("-ERR EXEC without MULTI\r\n")
 	}
 	if len(connState.cmdQueue) == 0 {
+		connState.multi = false
 		return []byte("*0\r\n")
 	}
 
@@ -311,5 +321,169 @@ func updateSlaveOffset(cmd string, totalBytes int, rdb *redisDB) {
 	if rdb.role == "slave" && handshakeComplete {
 		rdb.offset += totalBytes
 		fmt.Printf("\nCmd: %s,  Current Bytes: %d,  Bytes processed: %d\n", cmd, totalBytes, rdb.offset)
+	}
+}
+
+func validateStreamID(id string) string {
+	if id == "0-0" {
+		return "The ID specified in XADD must be greater than 0-0"
+	}
+	if id <= lastStreamID {
+		return "The ID specified in XADD is equal or smaller than the target stream top item"
+	}
+	return ""
+}
+
+func handleXRead(args []string, rdb *redisDB) []XReadEntry {
+	keyEndPos := findKeyEndPosition(args)
+	keys := args[:keyEndPos]
+	ids := args[keyEndPos:]
+
+	fmt.Println("Keys: ", keys, " IDs: ", ids)
+
+	entries := make([]XReadEntry, 0)
+	for i := 0; i < len(keys); i++ {
+		streamEntries := getStreamEntriesAfterID(rdb, keys[i], ids[i])
+		if len(streamEntries) > 0 {
+			entries = append(entries, XReadEntry{
+				key:   keys[i],
+				entry: streamEntries,
+			})
+		}
+	}
+
+	fmt.Println("Entries: ", entries)
+	return entries
+}
+
+func findKeyEndPosition(args []string) int {
+	for i, arg := range args {
+		if strings.Contains(arg, "-") {
+			return i
+		}
+	}
+	return 1
+}
+
+func getStreamEntriesAfterID(rdb *redisDB, key, afterID string) []redisStreamEntry {
+	var entries []redisStreamEntry
+	for _, entry := range rdb.redisStream.data[key] {
+		if entry.id > afterID {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
+	duration, _ := strconv.Atoi(args[0])
+	retryCount := calculateRetryCount(duration)
+
+	if duration != 0 {
+		fmt.Println("Blocking XREAD for ", duration, "ms")
+		time.Sleep(time.Millisecond * time.Duration(duration))
+	} else {
+		fmt.Println("Blocking XREAD till new data arrives")
+	}
+
+	if args[3] == "$" {
+		args[3] = lastStreamID
+	}
+
+	response := performBlockingRead(args[2:], retryCount, rdb)
+	fmt.Printf("Sent: %s\n", printCommand(response))
+	conn.Write(response)
+}
+
+func calculateRetryCount(duration int) int {
+	if duration != 0 {
+		return 1
+	}
+	return DefaultRetryCount
+}
+
+func performBlockingRead(args []string, retryCount int, rdb *redisDB) []byte {
+	for i := 0; i < retryCount; i++ {
+		entries := handleXRead(args, rdb)
+		if len(entries) > 0 {
+			return buildXReadResponse(entries)
+		}
+		if i < retryCount-1 {
+			time.Sleep(RetryInterval)
+		}
+	}
+	return []byte("$-1\r\n")
+}
+
+func buildXReadResponse(entries []XReadEntry) []byte {
+	response := fmt.Sprintf("*%d\r\n", len(entries))
+	for _, entry := range entries {
+		response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*1\r\n", len(entry.key), entry.key)
+		for _, streamEntry := range entry.entry {
+			response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(streamEntry.id), streamEntry.id)
+			for k, v := range streamEntry.fields {
+				response += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(k), k, len(v), v)
+			}
+		}
+	}
+	return []byte(response)
+}
+
+func setKeyValue(key string, value any, exp int64, totalBytes int, rdb *redisDB) []byte {
+	valueType := determineValueType(value)
+	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
+
+	if rdb.role == "master" {
+		rdb.offset += totalBytes
+		migrateToSlaves(key, value, rdb)
+		return []byte("+OK\r\n")
+	}
+
+	fmt.Println("Slave received set command: ", key, value, exp)
+	return []byte("")
+}
+
+func determineValueType(value any) string {
+	switch v := value.(type) {
+	case string:
+		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return "int"
+		}
+		return "string"
+	case int, int64, int32:
+		return "int"
+	case []string:
+		return "list"
+	case map[string]string:
+		return "hash"
+	default:
+		return "string"
+	}
+}
+
+func handleRpushCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return []byte("-ERR wrong number of arguments for 'rpush' command\r\n")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if exists {
+		if val.valType != "list" {
+			return []byte(fmt.Sprintf("-ERR value is not a list: %s\r\n", key))
+		}
+
+		debug("RPUSH: Key %s already exists with value %v\n", key, val.value)
+		val.value = append(val.value.([]string), args[1:]...)
+		setKeyValue(key, val.value, 0, 0, rdb)
+
+		return []byte(fmt.Sprintf(":%d\r\n", len(val.value.([]string))))
+	} else {
+		value := make([]string, 0)
+		value = append(value, args[1:]...)
+		rdb.setValue(key, value, "list", time.Now().UnixMilli(), 0)
+
+		debug("RPUSH: Key %s created with value %v\n", key, value)
+		return []byte(":1\r\n")
 	}
 }
