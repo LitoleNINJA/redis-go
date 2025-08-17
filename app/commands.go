@@ -552,10 +552,12 @@ func handleLrangeCommand(args []string, rdb *redisDB) []byte {
 		endIndex = len(list) + endIndex
 	}
 
+	if startIdx < 0 {
+		startIdx = 0
+	}
 	if endIndex >= len(list) {
 		endIndex = len(list) - 1
 	}
-
 	if startIdx > endIndex || startIdx >= len(list) {
 		return []byte("*0\r\n")
 	}
