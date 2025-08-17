@@ -484,6 +484,6 @@ func handleRpushCommand(args []string, rdb *redisDB) []byte {
 		rdb.setValue(key, value, "list", time.Now().UnixMilli(), 0)
 
 		debug("RPUSH: Key %s created with value %v\n", key, value)
-		return []byte(":1\r\n")
+		return []byte(fmt.Sprintf(":%d\r\n", len(value)))
 	}
 }
