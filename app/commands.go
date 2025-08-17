@@ -8,6 +8,38 @@ import (
 	"time"
 )
 
+// Redis response encoding functions
+func encodeSimpleString(s string) []byte {
+	return []byte(fmt.Sprintf("+%s\r\n", s))
+}
+
+func encodeBulkString(s string) []byte {
+	if s == "" {
+		return []byte("$-1\r\n") // null bulk string
+	}
+	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s))
+}
+
+func encodeInteger(i int64) []byte {
+	return []byte(fmt.Sprintf(":%d\r\n", i))
+}
+
+func encodeArray(elements []string) []byte {
+	result := fmt.Sprintf("*%d\r\n", len(elements))
+	for _, element := range elements {
+		result += fmt.Sprintf("$%d\r\n%s\r\n", len(element), element)
+	}
+	return []byte(result)
+}
+
+func encodeError(msg string) []byte {
+	return []byte(fmt.Sprintf("-ERR %s\r\n", msg))
+}
+
+func encodeNull() []byte {
+	return []byte("$-1\r\n")
+}
+
 type XReadEntry struct {
 	key   string
 	entry []redisStreamEntry
@@ -22,7 +54,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 			cmd:  cmd,
 			args: args,
 		})
-		return []byte("+QUEUED\r\n")
+		return encodeSimpleString("QUEUED")
 	}
 
 	var response []byte
@@ -64,7 +96,9 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	case "discard":
 		response = handleDiscardCommand(connState)
 	case "rpush":
-		response = handleRpushCommand(args, rdb)
+		response = handleRpushCommand(args, totalBytes, rdb)
+	case "lrange":
+		response = handleLrangeCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -75,13 +109,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 
 func handlePingCommand(rdb *redisDB) []byte {
 	if rdb.role == "master" {
-		return []byte("+PONG\r\n")
+		return encodeSimpleString("PONG")
 	}
 	return []byte("")
 }
 
 func handleEchoCommand(args []string) []byte {
-	return []byte(fmt.Sprintf("+%s\r\n", args[0]))
+	return encodeSimpleString(args[0])
 }
 
 func handleSetCommand(args []string, totalBytes int, rdb *redisDB) []byte {
@@ -97,10 +131,10 @@ func handleSetCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 func handleGetCommand(args []string, rdb *redisDB) []byte {
 	val, err := rdb.getValue(args[0])
 	if err != "" {
-		return []byte(err)
+		return encodeNull()
 	}
 	valueStr := fmt.Sprintf("%v", val.value)
-	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(valueStr), valueStr))
+	return encodeBulkString(valueStr)
 }
 
 func handleInfoCommand(rdb *redisDB) []byte {
@@ -114,11 +148,11 @@ func handleInfoCommand(rdb *redisDB) []byte {
 
 func handleConfigCommand(args []string) []byte {
 	if args[0] == "get" && args[1] == "dir" {
-		return []byte(fmt.Sprintf("*2\r\n$3\r\ndir\r\n$%d\r\n%s\r\n", len(*dir), *dir))
+		return encodeArray([]string{"dir", *dir})
 	} else if args[0] == "get" && args[1] == "dbfilename" {
-		return []byte(fmt.Sprintf("*2\r\n$10\r\ndbfilename\r\n$%d\r\n%s\r\n", len(*dbFileName), *dbFileName))
+		return encodeArray([]string{"dbfilename", *dbFileName})
 	}
-	return []byte("-ERR unsupported CONFIG parameter\r\n")
+	return encodeError("unsupported CONFIG parameter")
 }
 
 func handleKeysCommand(rdb *redisDB) []byte {
@@ -126,18 +160,14 @@ func handleKeysCommand(rdb *redisDB) []byte {
 	for k := range rdb.rdbFile.data {
 		keys = append(keys, k)
 	}
-	response := []byte(fmt.Sprintf("*%d\r\n", len(keys)))
-	for _, k := range keys {
-		response = append(response, fmt.Sprintf("$%d\r\n%s\r\n", len(k), k)...)
-	}
-	return response
+	return encodeArray(keys)
 }
 
 func handleTypeCommand(args []string, rdb *redisDB) []byte {
 	if val, ok := rdb.data[args[0]]; ok {
-		return []byte(fmt.Sprintf("+%s\r\n", val.valType))
+		return encodeSimpleString(val.valType)
 	}
-	return []byte("+none\r\n")
+	return encodeSimpleString("none")
 }
 
 func handleXAddCommand(args []string, rdb *redisDB) []byte {
@@ -260,11 +290,11 @@ func handleIncrCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	if err != "" {
 		fmt.Printf("%s : value not found !\n", args[0])
 		setKeyValue(args[0], "1", 0, totalBytes, rdb)
-		return []byte(":1\r\n")
+		return encodeInteger(1)
 	}
 	if val.valType != "int" {
 		fmt.Printf("Can not increment value of type : %s", val.valType)
-		return []byte("-ERR value is not an integer or out of range\r\n")
+		return encodeError("value is not an integer or out of range")
 	}
 
 	valueStr := fmt.Sprintf("%v", val.value)
@@ -272,18 +302,18 @@ func handleIncrCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	intVal++
 	stringVal := strconv.FormatInt(intVal, 10)
 	setKeyValue(args[0], stringVal, 0, totalBytes, rdb)
-	return []byte(":" + stringVal + "\r\n")
+	return encodeInteger(intVal)
 }
 
 func handleMultiCommand(connState *connectionState) []byte {
 	connState.multi = true
 	connState.cmdQueue = make([]redisCommands, 0)
-	return []byte("+OK\r\n")
+	return encodeSimpleString("OK")
 }
 
 func handleExecCommand(connState *connectionState, conn net.Conn, totalBytes int, rdb *redisDB) []byte {
 	if !connState.multi {
-		return []byte("-ERR EXEC without MULTI\r\n")
+		return encodeError("EXEC without MULTI")
 	}
 	if len(connState.cmdQueue) == 0 {
 		connState.multi = false
@@ -302,17 +332,17 @@ func handleExecCommand(connState *connectionState, conn net.Conn, totalBytes int
 
 func handleDiscardCommand(connState *connectionState) []byte {
 	if !connState.multi {
-		return []byte("-ERR DISCARD without MULTI\r\n")
+		return encodeError("DISCARD without MULTI")
 	}
 	connState.multi = false
 	connState.cmdQueue = make([]redisCommands, 0)
-	return []byte("+OK\r\n")
+	return encodeSimpleString("OK")
 }
 
 func handleUnknownCommand(cmd string, rdb *redisDB) []byte {
 	fmt.Printf("Unknown command: %s\n", cmd)
 	if rdb.role == "master" {
-		return []byte("-ERR unknown command\r\n")
+		return encodeError("unknown command")
 	}
 	return []byte("")
 }
@@ -436,7 +466,7 @@ func setKeyValue(key string, value any, exp int64, totalBytes int, rdb *redisDB)
 	if rdb.role == "master" {
 		rdb.offset += totalBytes
 		migrateToSlaves(key, value, rdb)
-		return []byte("+OK\r\n")
+		return encodeSimpleString("OK")
 	}
 
 	fmt.Println("Slave received set command: ", key, value, exp)
@@ -461,29 +491,79 @@ func determineValueType(value any) string {
 	}
 }
 
-func handleRpushCommand(args []string, rdb *redisDB) []byte {
+func handleRpushCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	if len(args) < 2 {
-		return []byte("-ERR wrong number of arguments for 'rpush' command\r\n")
+		return encodeError("wrong number of arguments for 'rpush' command")
 	}
 
 	key := args[0]
 	val, exists := rdb.data[key]
 	if exists {
 		if val.valType != "list" {
-			return []byte(fmt.Sprintf("-ERR value is not a list: %s\r\n", key))
+			return encodeError(fmt.Sprintf("value is not a list: %s", key))
 		}
 
 		debug("RPUSH: Key %s already exists with value %v\n", key, val.value)
-		val.value = append(val.value.([]string), args[1:]...)
-		setKeyValue(key, val.value, 0, 0, rdb)
+		list := val.value.([]string)
+		list = append(list, args[1:]...)
+		setKeyValue(key, list, 0, totalBytes, rdb)
 
-		return []byte(fmt.Sprintf(":%d\r\n", len(val.value.([]string))))
+		return encodeInteger(int64(len(list)))
 	} else {
 		value := make([]string, 0)
 		value = append(value, args[1:]...)
-		rdb.setValue(key, value, "list", time.Now().UnixMilli(), 0)
+		setKeyValue(key, value, 0, totalBytes, rdb)
 
 		debug("RPUSH: Key %s created with value %v\n", key, value)
-		return []byte(fmt.Sprintf(":%d\r\n", len(value)))
+		return encodeInteger(int64(len(value)))
 	}
+}
+
+func handleLrangeCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 3 {
+		return encodeError("wrong number of arguments for 'lrange' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return []byte("*0\r\n")
+	}
+	if val.valType != "list" {
+		return encodeError(fmt.Sprintf("value is not a list: %s", key))
+	}
+
+	list := val.value.([]string)
+
+	startIdx, err := strconv.Atoi(args[1])
+	if err != nil {
+		return encodeError("start index is not an integer")
+	}
+	endIndex, err := strconv.Atoi(args[2])
+	if err != nil {
+		return encodeError("end index is not an integer")
+	}
+
+	// Handle negative indices
+	// if startIdx < 0 {
+	// 	startIdx = len(list) + startIdx
+	// }
+	// if endIndex < 0 {
+	// 	endIndex = len(list) + endIndex
+	// }
+
+	if endIndex >= len(list) {
+		endIndex = len(list) - 1
+	}
+
+	if startIdx > endIndex || startIdx >= len(list) {
+		return []byte("*0\r\n")
+	}
+
+	result := make([]string, 0)
+	for i := startIdx; i <= endIndex; i++ {
+		result = append(result, list[i])
+	}
+
+	return encodeArray(result)
 }

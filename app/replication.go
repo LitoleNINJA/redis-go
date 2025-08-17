@@ -146,7 +146,7 @@ func handleReplConfCommand(args []string, rdb *redisDB) []byte {
 			fmt.Println("Ack count: ", rdb.getAckCnt())
 			return []byte("")
 		}
-		return []byte("+OK\r\n")
+		return encodeSimpleString("OK")
 	}
 
 	offsetStr := strconv.Itoa(rdb.offset)
@@ -182,7 +182,7 @@ func handlePSyncCommand(conn net.Conn, rdb *redisDB) []byte {
 func handleWaitCommand(args []string, rdb *redisDB) []byte {
 	if rdb.offset == 0 {
 		fmt.Println("Master has not propagated any commands")
-		return []byte(fmt.Sprintf(":%d\r\n", len(rdb.replicas)))
+		return encodeInteger(int64(len(rdb.replicas)))
 	}
 
 	minRepCnt, _ := strconv.Atoi(args[0])
@@ -198,11 +198,11 @@ func handleWaitCommand(args []string, rdb *redisDB) []byte {
 		select {
 		case <-rdb.ackChan:
 			if rdb.getAckCnt() >= minRepCnt {
-				return []byte(fmt.Sprintf(":%d\r\n", rdb.getAckCnt()))
+				return encodeInteger(int64(rdb.getAckCnt()))
 			}
 		case <-ticker.C:
 			if time.Now().After(endTime) {
-				return []byte(fmt.Sprintf(":%d\r\n", rdb.getAckCnt()))
+				return encodeInteger(int64(rdb.getAckCnt()))
 			}
 		}
 	}
