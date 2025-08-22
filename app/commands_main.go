@@ -422,7 +422,7 @@ func handleLLenCommand(args []string, rdb *redisDB) []byte {
 }
 
 func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
-	if len(args) != 1 {
+	if len(args) < 1 {
 		return encodeError("wrong number of arguments for 'lpop' command")
 	}
 
@@ -437,8 +437,24 @@ func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		return encodeNull()
 	}
 
-	removedValue := list[0]
-	setKeyValue(key, list[1:], 0, totalBytes, rdb)
+	if len(args) == 1 {
+		removedValue := list[0]
+		setKeyValue(key, list[1:], 0, totalBytes, rdb)
+		
+		return encodeBulkString(removedValue)
+	} else {
+		popCount, _ := strconv.Atoi(args[1])
+		removedValues := make([]string, popCount)
+		if popCount > len(list) {
+			popCount = len(list)
+		}
 
-	return encodeBulkString(removedValue)
+		for i := 0; i < popCount; i++ {
+			removedValues[i] = list[i]
+		}
+
+		setKeyValue(key, list[popCount:], 0, totalBytes, rdb)
+
+		return encodeArray(removedValues)
+	}
 }
