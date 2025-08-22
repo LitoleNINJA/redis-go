@@ -66,6 +66,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleLpushCommand(args, totalBytes, rdb)
 	case "llen":
 		response = handleLLenCommand(args, rdb)
+	case "lpop":
+		response = handleLPopCommand(args, totalBytes, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -417,4 +419,26 @@ func handleLLenCommand(args []string, rdb *redisDB) []byte {
 	list := val.value.([]string)
 
 	return encodeInteger(int64(len(list)))
+}
+
+func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
+	if len(args) != 1 {
+		return encodeError("wrong number of arguments for 'lpop' command")
+	}
+
+	key := args[0]
+	value, exists := rdb.data[key]
+	if !exists {
+		return encodeNull()
+	}
+
+	list := value.value.([]string)
+	if len(list) == 0 {
+		return encodeNull()
+	}
+
+	removedValue := list[0]
+	setKeyValue(key, list[1:], 0, totalBytes, rdb)
+
+	return encodeBulkString(removedValue)
 }
