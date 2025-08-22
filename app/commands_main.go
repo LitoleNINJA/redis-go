@@ -116,9 +116,9 @@ func handleInfoCommand(rdb *redisDB) []byte {
 }
 
 func handleConfigCommand(args []string) []byte {
-	if args[0] == "get" && args[1] == "dir" {
+	if strings.ToLower(args[0]) == "get" && args[1] == "dir" {
 		return encodeArray([]string{"dir", *dir})
-	} else if args[0] == "get" && args[1] == "dbfilename" {
+	} else if strings.ToLower(args[0]) == "get" && args[1] == "dbfilename" {
 		return encodeArray([]string{"dbfilename", *dbFileName})
 	}
 	return encodeError("unsupported CONFIG parameter")
