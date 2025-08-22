@@ -99,6 +99,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleRpushCommand(args, totalBytes, rdb)
 	case "lrange":
 		response = handleLrangeCommand(args, rdb)
+	case "lpush":
+		response = handleLpushCommand(args, totalBytes, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -568,4 +570,34 @@ func handleLrangeCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeArray(result)
+}
+
+func handleLpushCommand(args []string, totalBytes int, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError("wrong number of arguments for 'rpush' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if exists {
+		if val.valType != "list" {
+			return encodeError(fmt.Sprintf("value is not a list: %s", key))
+		}
+
+		debug("RPUSH: Key %s already exists with value %v\n", key, val.value)
+		list := val.value.([]string)
+		for _, element := range args[1:] {
+			list = append([]string{element}, list...)
+		}
+		setKeyValue(key, list, 0, totalBytes, rdb)
+
+		return encodeInteger(int64(len(list)))
+	} else {
+		value := make([]string, 0)
+		value = append(value, args[1:]...)
+		setKeyValue(key, value, 0, totalBytes, rdb)
+
+		debug("RPUSH: Key %s created with value %v\n", key, value)
+		return encodeInteger(int64(len(value)))
+	}
 }
