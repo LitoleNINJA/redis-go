@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -197,11 +198,14 @@ func (rdb *redisDB) removeConnState(addr string) {
 func addCommandToBuffer(buf string, n int, rdb *redisDB) {
 	prev := 0
 	for i := 0; i < n; i++ {
-		if buf[i] == '*' && isDigit(buf[i+1]) {
+		// prevent out-of-bounds on buf[i+1]
+		if buf[i] == '*' && i+1 < n && isDigit(buf[i+1]) {
 			str := buf[prev:i]
 			if len(str) > 1 && str[0] != '*' {
 				parts := strings.Split(str, "$")
-				parts[1] = "$" + parts[1]
+				if len(parts) > 1 {
+					parts[1] = "$" + parts[1]
+				}
 				for _, part := range parts {
 					if len(part) > 0 {
 						rdb.buffer = append(rdb.buffer, part)
@@ -223,21 +227,32 @@ func parseCommand(buf string) (string, []string, int) {
 		parts = strings.Split(buf, "\\r\\n")
 	}
 
-	argCount := int(buf[1] - '0')
+	if len(parts) == 0 || len(parts[0]) == 0 || parts[0][0] != '*' {
+		fmt.Printf("Command: , Args: []\n")
+		return "", nil, len(buf)
+	}
+
+	// parse full multi-digit array length (e.g., "*10")
+	argCount, err := strconv.Atoi(parts[0][1:])
+	if err != nil || argCount <= 0 {
+		fmt.Printf("Command: , Args: []\n")
+		return "", nil, len(buf)
+	}
 
 	var cmd string
-	args := make([]string, 0)
+	args := make([]string, 0, argCount-1)
 
 	for i := 0; i < argCount; i++ {
-		pos := 2*i + 1
-		if len(parts[i]) == 0 {
-			continue
+		pos := 2*i + 1 // $len at odd indices, value at next
+		if pos+1 >= len(parts) {
+			break
 		}
-		if parts[pos][0] == '$' {
+		if len(parts[pos]) > 0 && parts[pos][0] == '$' {
 			if cmd == "" {
 				cmd = strings.ToLower(parts[pos+1])
 			} else {
-				args = append(args, strings.ToLower(parts[pos+1]))
+				// keep original case for args (keys/values)
+				args = append(args, parts[pos+1])
 			}
 		}
 	}
