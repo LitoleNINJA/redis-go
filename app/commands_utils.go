@@ -111,7 +111,7 @@ func performBlockingRead(args []string, retryCount int, rdb *redisDB) []byte {
 			time.Sleep(RetryInterval)
 		}
 	}
-	return []byte("$-1\r\n")
+	return []byte("*-1\r\n")
 }
 
 func buildXReadResponse(entries []XReadEntry) []byte {
@@ -180,12 +180,12 @@ func setKeyValue(key string, value any, exp int64, totalBytes int, rdb *redisDB)
 	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
 
 	// Notify BLPOP waiters when a list changes (non-blocking)
-    if valueType == "list" && rdb.dataChan != nil {
-        select {
-        case rdb.dataChan <- struct{}{}:
-        default:
-        }
-    }
+	if valueType == "list" && rdb.dataChan != nil {
+		select {
+		case rdb.dataChan <- struct{}{}:
+		default:
+		}
+	}
 
 	if rdb.role == "master" {
 		rdb.offset += totalBytes
