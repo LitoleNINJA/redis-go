@@ -244,7 +244,7 @@ func handleBlockPop(key string, timeStr string, rdb *redisDB) []byte {
 		case <-ticker.C:
 			if timeout != 0 && time.Now().After(endTime) {
 				debug("Timeout reached, returning null\n")
-				return encodeNull()
+				return []byte("$*1\r\n")
 			}
 		}
 	}
