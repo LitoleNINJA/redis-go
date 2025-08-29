@@ -219,8 +219,8 @@ func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
 
 func handleBlockPop(key string, timeStr string, rdb *redisDB) []byte {
 	timeout, _ := strconv.ParseFloat(timeStr, 64)
-	endTime := time.Now().Add(time.Duration(timeout) * time.Second)
-	debug("BLPOP: Key %s, Timeout: %f seconds\n", key, timeout)
+	duration := time.Duration(timeout*1000) * time.Millisecond
+    endTime := time.Now().Add(duration)
 
 	ticker := time.NewTicker(TickerInterval)
 	defer ticker.Stop()
