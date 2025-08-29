@@ -179,6 +179,14 @@ func setKeyValue(key string, value any, exp int64, totalBytes int, rdb *redisDB)
 	valueType := determineValueType(value)
 	rdb.setValue(key, value, valueType, time.Now().UnixMilli(), exp)
 
+	// Notify BLPOP waiters when a list changes (non-blocking)
+    if valueType == "list" && rdb.dataChan != nil {
+        select {
+        case rdb.dataChan <- struct{}{}:
+        default:
+        }
+    }
+
 	if rdb.role == "master" {
 		rdb.offset += totalBytes
 		migrateToSlaves(key, value, rdb)
@@ -207,4 +215,36 @@ func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
 	response := performBlockingRead(args[2:], retryCount, rdb)
 	fmt.Printf("Sent: %s\n", printCommand(response))
 	conn.Write(response)
+}
+
+func handleBlockPop(key string, timeStr string, rdb *redisDB) []byte {
+	timeout, _ := strconv.Atoi(timeStr)
+	endTime := time.Now().Add(time.Duration(timeout) * time.Second)
+
+	ticker := time.NewTicker(TickerInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-rdb.dataChan:
+			debug("BLPOP: Key %s notified of data change, rechecking...\n", key)
+			val, exists := rdb.data[key]
+			if !exists || val.valType != "list" {
+				continue
+			}
+			list := val.value.([]string)
+			if len(list) == 0 {
+				continue
+			}
+
+			elem := list[0]
+			rdb.setValue(key, list[1:], "list", time.Now().UnixMilli(), 0)
+			return encodeArray([]string{key, elem})
+		case <-ticker.C:
+			if timeout != 0 && time.Now().After(endTime) {
+				debug("Timeout reached, returning null\n")
+				return encodeNull()
+			}
+		}
+	}
 }

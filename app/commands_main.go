@@ -68,6 +68,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleLLenCommand(args, rdb)
 	case "lpop":
 		response = handleLPopCommand(args, totalBytes, rdb)
+	case "blpop":
+		response = handleBLpopCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -456,5 +458,32 @@ func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		setKeyValue(key, list[popCount:], 0, totalBytes, rdb)
 
 		return encodeArray(removedValues)
+	}
+}
+
+func handleBLpopCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError("wrong number of arguments for 'blpop' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+
+	if !exists {
+		debug("BLPOP: Key %s does not exist, blocking...\n", key)
+		return handleBlockPop(key, args[1], rdb)
+	} else {
+		if val.valType != "list" {
+			return encodeError(fmt.Sprintf("value is not a list: %s", key))
+		}
+
+		list := val.value.([]string)
+
+		if len(list) == 0 {
+			debug("BLPOP: Key %s exists but list is empty, blocking...\n", key)
+			return handleBlockPop(key, args[1], rdb)
+		}
+
+		return handleLPopCommand(args, 0, rdb)
 	}
 }

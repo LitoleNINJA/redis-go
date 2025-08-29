@@ -69,6 +69,7 @@ func parseReplicaConfig() (string, string) {
 func createRedisDB() *redisDB {
 	return &redisDB{
 		data:     make(map[string]redisValue),
+		dataChan: make(chan struct{}, 10),
 		role:     "master",
 		replID:   DefaultReplicationID,
 		mux:      &sync.Mutex{},

@@ -22,6 +22,7 @@ const (
 
 type redisDB struct {
 	data        map[string]redisValue
+	dataChan 	chan struct{}
 	role        string
 	replID      string
 	mux         *sync.Mutex
