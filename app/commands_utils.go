@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/emirpasic/gods/trees/redblacktree"
 )
 
 // Redis response encoding functions
@@ -131,11 +129,8 @@ func buildXReadResponse(entries []XReadEntry) []byte {
 }
 
 func determineValueType(value any) string {
-	switch v := value.(type) {
+	switch value.(type) {
 	case string:
-		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
-			return "int"
-		}
 		return "string"
 	case int, int64, int32:
 		return "int"
@@ -143,7 +138,7 @@ func determineValueType(value any) string {
 		return "list"
 	case map[string]string:
 		return "hash"
-	case *redblacktree.Tree:
+	case *sortedSet:
 		return "zset"
 	default:
 		return "string"
@@ -224,7 +219,7 @@ func handleBlockXRead(args []string, conn net.Conn, rdb *redisDB) {
 func handleBlockPop(key string, timeStr string, rdb *redisDB) []byte {
 	timeout, _ := strconv.ParseFloat(timeStr, 64)
 	duration := time.Duration(timeout*1000) * time.Millisecond
-    endTime := time.Now().Add(duration)
+	endTime := time.Now().Add(duration)
 
 	ticker := time.NewTicker(TickerInterval)
 	defer ticker.Stop()

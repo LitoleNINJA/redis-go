@@ -9,5 +9,3 @@
 module github.com/codecrafters-io/redis-starter-go
 
 go 1.19
-
-require github.com/emirpasic/gods v1.18.1

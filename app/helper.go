@@ -12,7 +12,7 @@ import (
 
 var (
 	debugEnabled = os.Getenv("DEBUG") != ""
-	debugLogger  = log.New(os.Stderr, "[DEBUG] ", 0)
+	debugLogger  = log.New(os.Stdout, "[DEBUG] ", 0)
 )
 
 func debug(format string, args ...any) {
@@ -160,7 +160,12 @@ func parseRDBFile(reader *bytes.Reader, rdb *rdbFile) error {
 					value:     value,
 					valType:   "string",
 					createdAt: time.Now().UnixMilli(),
-					expiry:    func() int64 { if expiry < 1 { return 1 }; return expiry }(),
+					expiry: func() int64 {
+						if expiry < 1 {
+							return 1
+						}
+						return expiry
+					}(),
 				}
 			} else {
 				rdb.data[key] = redisValue{

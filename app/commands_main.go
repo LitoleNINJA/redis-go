@@ -2,14 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/emirpasic/gods/trees/redblacktree"
-	"github.com/emirpasic/gods/utils"
 )
 
 func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb *redisDB) []byte {
@@ -76,6 +72,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleBLpopCommand(args, rdb)
 	case "zadd":
 		response = handleZaddCommand(args, totalBytes, rdb)
+	case "zrank":
+		response = handleZrankCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -495,44 +493,70 @@ func handleBLpopCommand(args []string, rdb *redisDB) []byte {
 }
 
 func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
-	if len(args) < 3 {
+	if len(args) < 3 || len(args)%2 == 0 {
 		return encodeError("wrong number of arguments for 'zadd' command")
 	}
 
-	var sortedSet *redblacktree.Tree
-	scoreStr, value := args[1], args[2]
-	addedCount := 0
-	score, err := strconv.ParseFloat(scoreStr, 64)
-	if err != nil {
-		return encodeError("score is not a valid float")
-	}
-	
 	key := args[0]
 	val, exists := rdb.data[key]
+
+	var ss *sortedSet
 	if exists {
 		if val.valType != "zset" {
-			return encodeError(fmt.Sprintf("value is not a sorted set: %s", key))
+			return encodeError("WRONGTYPE Operation against a key holding the wrong kind of value")
 		}
-
-		sortedSet = val.value.(*redblacktree.Tree)
-		found := false
-		for _, v := range sortedSet.Values() {
-			if v == value {
-				found = true
-			}				
-		}
-		if !found {
-			addedCount = 1
-		}
-		log.Printf("ZADD: Key %s already exists with value %v\n", key, val.value)
+		ss = val.value.(*sortedSet)
 	} else {
-		sortedSet = redblacktree.NewWith(utils.Float64Comparator)
-		addedCount = 1
-		log.Printf("ZADD: Key %s created with new sorted set\n", key)
+		ss = newSortedSet()
 	}
 
-	sortedSet.Put(score, value)
-	
-	setKeyValue(key, sortedSet, 0, totalBytes, rdb)
+	addedCount := 0
+	for i := 1; i < len(args); i += 2 {
+		scoreStr := args[i]
+		member := args[i+1]
+
+		score, err := strconv.ParseFloat(scoreStr, 64)
+		if err != nil {
+			return encodeError("ERR value is not a valid float")
+		}
+
+		// Add returns true if member was newly added
+		if ss.add(member, score) {
+			addedCount++
+		}
+		debug("ZADD: Added/updated member %s with score %f to key %s\n", member, score, key)
+	}
+
+	setKeyValue(key, ss, 0, totalBytes, rdb)
 	return encodeInteger(int64(addedCount))
+}
+
+func handleZrankCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError("wrong number of arguments for 'zrank' command")
+	}
+
+	key := args[0]
+	member := args[1]
+
+	val, exists := rdb.data[key]
+	if !exists {
+		debug("ZRANK: Key %s does not exist\n", key)
+		return encodeNull()
+	}
+
+	if val.valType != "zset" {
+		return encodeError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	ss := val.value.(*sortedSet)
+	rank, found := ss.rank(member)
+
+	if !found {
+		debug("ZRANK: Member %s not found in key %s\n", member, key)
+		return encodeNull()
+	}
+
+	debug("ZRANK: Found member %s in key %s with rank %d\n", member, key, rank)
+	return encodeInteger(int64(rank))
 }
