@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/emirpasic/gods/trees/redblacktree"
+	"github.com/emirpasic/gods/utils"
 )
 
 func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb *redisDB) []byte {
@@ -70,6 +73,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleLPopCommand(args, totalBytes, rdb)
 	case "blpop":
 		response = handleBLpopCommand(args, rdb)
+	case "zadd":
+		response = handleZaddCommand(args, totalBytes, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -442,7 +447,7 @@ func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	if len(args) == 1 {
 		removedValue := list[0]
 		setKeyValue(key, list[1:], 0, totalBytes, rdb)
-		
+
 		return encodeBulkString(removedValue)
 	} else {
 		popCount, _ := strconv.Atoi(args[1])
@@ -486,4 +491,35 @@ func handleBLpopCommand(args []string, rdb *redisDB) []byte {
 
 		return handleLPopCommand(args, 0, rdb)
 	}
+}
+
+func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
+	if len(args) < 3 {
+		return encodeError("wrong number of arguments for 'zadd' command")
+	}
+
+	var sortedSet *redblacktree.Tree
+	scoreStr, value := args[1], args[2]
+	score, err := strconv.ParseFloat(scoreStr, 64)
+	if err != nil {
+		return encodeError("score is not a valid float")
+	}
+	
+	key := args[0]
+	val, exists := rdb.data[key]
+	if exists {
+		if val.valType != "zset" {
+			return encodeError(fmt.Sprintf("value is not a sorted set: %s", key))
+		}
+
+		sortedSet = val.value.(*redblacktree.Tree)
+	} else {
+
+		sortedSet = redblacktree.NewWith(utils.Float64Comparator)
+	}
+
+	sortedSet.Put(score, value)
+	
+	setKeyValue(key, sortedSet, 0, totalBytes, rdb)
+	return encodeInteger(1)
 }
