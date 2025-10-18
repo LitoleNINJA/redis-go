@@ -129,8 +129,11 @@ func buildXReadResponse(entries []XReadEntry) []byte {
 }
 
 func determineValueType(value any) string {
-	switch value.(type) {
+	switch v := value.(type) {
 	case string:
+		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return "int"
+		}
 		return "string"
 	case int, int64, int32:
 		return "int"
