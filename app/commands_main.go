@@ -514,7 +514,13 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		}
 
 		sortedSet = val.value.(*redblacktree.Tree)
-		if _, found := sortedSet.Get(value); !found {
+		found := false
+		for _, v := range sortedSet.Values() {
+			if v == value {
+				found = true
+			}				
+		}
+		if !found {
 			addedCount = 1
 		}
 	} else {
@@ -522,7 +528,7 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		addedCount = 1
 	}
 
-	sortedSet.Put(value, score)
+	sortedSet.Put(score, value)
 	
 	setKeyValue(key, sortedSet, 0, totalBytes, rdb)
 	return encodeInteger(int64(addedCount))
