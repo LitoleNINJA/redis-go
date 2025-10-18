@@ -244,7 +244,7 @@ func handleIncrCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	val, err := rdb.getValue(args[0])
 	if err != "" {
 		fmt.Printf("%s : value not found !\n", args[0])
-		setKeyValue(args[0], "1", 0, totalBytes, rdb)
+		setKeyValue(args[0], 1, 0, totalBytes, rdb)
 		return encodeInteger(1)
 	}
 	if val.valType != "int" {
