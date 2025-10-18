@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -523,9 +524,11 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		if !found {
 			addedCount = 1
 		}
+		log.Printf("ZADD: Key %s already exists with value %v\n", key, val.value)
 	} else {
 		sortedSet = redblacktree.NewWith(utils.Float64Comparator)
 		addedCount = 1
+		log.Printf("ZADD: Key %s created with new sorted set\n", key)
 	}
 
 	sortedSet.Put(score, value)

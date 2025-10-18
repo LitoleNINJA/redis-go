@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/emirpasic/gods/trees/redblacktree"
 )
 
 // Redis response encoding functions
@@ -141,6 +143,8 @@ func determineValueType(value any) string {
 		return "list"
 	case map[string]string:
 		return "hash"
+	case *redblacktree.Tree:
+		return "zset"
 	default:
 		return "string"
 	}
