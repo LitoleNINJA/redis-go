@@ -500,6 +500,7 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 
 	var sortedSet *redblacktree.Tree
 	scoreStr, value := args[1], args[2]
+	addedCount := 0
 	score, err := strconv.ParseFloat(scoreStr, 64)
 	if err != nil {
 		return encodeError("score is not a valid float")
@@ -513,13 +514,16 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		}
 
 		sortedSet = val.value.(*redblacktree.Tree)
+		if _, found := sortedSet.Get(value); !found {
+			addedCount = 1
+		}
 	} else {
-
 		sortedSet = redblacktree.NewWith(utils.Float64Comparator)
+		addedCount = 1
 	}
 
-	sortedSet.Put(score, value)
+	sortedSet.Put(value, score)
 	
 	setKeyValue(key, sortedSet, 0, totalBytes, rdb)
-	return encodeInteger(1)
+	return encodeInteger(int64(addedCount))
 }
