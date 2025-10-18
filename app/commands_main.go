@@ -255,8 +255,7 @@ func handleIncrCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 	valueStr := fmt.Sprintf("%v", val.value)
 	intVal, _ := strconv.ParseInt(valueStr, 10, 64)
 	intVal++
-	stringVal := strconv.FormatInt(intVal, 10)
-	setKeyValue(args[0], stringVal, 0, totalBytes, rdb)
+	setKeyValue(args[0], intVal, 0, totalBytes, rdb)
 	return encodeInteger(intVal)
 }
 
