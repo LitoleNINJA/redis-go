@@ -1,6 +1,10 @@
 package main
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+	"strconv"
+)
 
 type sortedSetMember struct {
 	score  float64
@@ -40,6 +44,30 @@ func (set *sortedSet) add(member string, score float64) bool {
 	return !exists
 }
 
+func (set *sortedSet) addMultiple(args []string) (int, error) {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return 0, fmt.Errorf("wrong number of arguments")
+	}
+
+	addedCount := 0
+	for i := 0; i < len(args); i += 2 {
+		scoreStr := args[i]
+		member := args[i+1]
+
+		score, err := strconv.ParseFloat(scoreStr, 64)
+		if err != nil {
+			return 0, fmt.Errorf("ERR value is not a valid float")
+		}
+
+		if set.add(member, score) {
+			addedCount++
+		}
+		debug("ZADD: Added/updated member %s with score %f\n", member, score)
+	}
+
+	return addedCount, nil
+}
+
 func (set *sortedSet) rank(member string) (int, bool) {
 	score, exists := set.members[member]
 	if !exists {
@@ -54,4 +82,27 @@ func (set *sortedSet) rank(member string) (int, bool) {
 	}
 
 	return -1, false
+}
+
+func (set *sortedSet) getValues() []string {
+	values := make([]string, 0, len(set.ranks))
+	for _, m := range set.ranks {
+		values = append(values, m.member)
+	}
+
+	return values
+}
+
+func (set *sortedSet) size() int {
+	return len(set.members)
+}
+
+func (set *sortedSet) exists(member string) bool {
+	_, exists := set.members[member]
+	return exists
+}
+
+func (set *sortedSet) getScore(member string) (float64, bool) {
+	score, exists := set.members[member]
+	return score, exists
 }

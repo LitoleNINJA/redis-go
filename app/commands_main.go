@@ -74,6 +74,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleZaddCommand(args, totalBytes, rdb)
 	case "zrank":
 		response = handleZrankCommand(args, rdb)
+	case "zrange":
+		response = handleZrangeCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -509,21 +511,9 @@ func handleZaddCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 		ss = newSortedSet()
 	}
 
-	addedCount := 0
-	for i := 1; i < len(args); i += 2 {
-		scoreStr := args[i]
-		member := args[i+1]
-
-		score, err := strconv.ParseFloat(scoreStr, 64)
-		if err != nil {
-			return encodeError("ERR value is not a valid float")
-		}
-
-		// Add returns true if member was newly added
-		if ss.add(member, score) {
-			addedCount++
-		}
-		debug("ZADD: Added/updated member %s with score %f to key %s\n", member, score, key)
+	addedCount, err := ss.addMultiple(args[1:])
+	if err != nil {
+		return encodeError(err.Error())
 	}
 
 	setKeyValue(key, ss, 0, totalBytes, rdb)
@@ -552,10 +542,48 @@ func handleZrankCommand(args []string, rdb *redisDB) []byte {
 	rank, found := ss.rank(member)
 
 	if !found {
-		debug("ZRANK: Member %s not found in key %s\n", member, key)
 		return encodeNull()
 	}
 
 	debug("ZRANK: Found member %s in key %s with rank %d\n", member, key, rank)
 	return encodeInteger(int64(rank))
+}
+
+func handleZrangeCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 3 {
+		return encodeError("wrong number of arguments for 'zrange' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		debug("ZRANGE: Key %s does not exist\n", key)
+		return []byte("*0\r\n")
+	}
+	if val.valType != "zset" {
+		return encodeError("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	ss := val.value.(*sortedSet)
+	values := ss.getValues()
+
+	start, _ := strconv.ParseInt(args[1], 10, 64)
+	end, _ := strconv.ParseInt(args[2], 10, 64)
+
+	if start >= int64(ss.size()) {
+		return []byte("*0\r\n")
+	}
+	if end >= int64(ss.size()) {
+		end = int64(ss.size() - 1)
+	}
+	if start > end {
+		return []byte("*0\r\n")
+	}
+
+	resp := make([]string, 0)
+	for i := start; i <= end; i++ {
+		resp = append(resp, values[i])
+	}
+
+	return encodeArray(resp)
 }
