@@ -668,11 +668,7 @@ func handleSubscribeCommand(args []string, rdb *redisDB) []byte {
 		return encodeError("wrong number of arguments for 'subscribe' command")
 	}
 
-	resp := make([]string, 0)
 	count := subscribe(args[0])
-	resp = append(resp, "subscribe")
-	resp = append(resp, args[0])
-	resp = append(resp, strconv.Itoa(count))
 
-	return encodeArray(resp)
+	return encodeArray([]string{"subscribe", args[0], string(encodeInteger(int64(count)))})
 }
