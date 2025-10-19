@@ -232,3 +232,13 @@ func readEncodedLength(reader *bytes.Reader) (int, bool, error) {
 
 	return 0, false, fmt.Errorf("invalid encoded length format")
 }
+
+// Helper function to check if a string is in a slice
+func contains(slice []string, item string) bool {
+	for _, v := range slice {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}

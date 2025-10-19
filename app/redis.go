@@ -41,6 +41,7 @@ type redisDB struct {
 type connectionState struct {
 	multi    bool
 	cmdQueue []redisCommands
+	subMode  bool
 }
 
 type redisValue struct {

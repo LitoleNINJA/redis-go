@@ -159,6 +159,7 @@ func (rdb *redisDB) getConnState(addr string) *connectionState {
 		state = &connectionState{
 			multi:    false,
 			cmdQueue: make([]redisCommands, 0),
+			subMode:  false,
 		}
 		rdb.connStates[addr] = state
 		rdb.stateMux.Unlock()

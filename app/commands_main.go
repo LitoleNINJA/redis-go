@@ -12,6 +12,13 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	connAddr := conn.RemoteAddr().String()
 	connState := rdb.getConnState(connAddr)
 
+	if connState.subMode {
+		allowedCommands := []string{"ping", "subscribe", "unsubscribe", "psubscribe", "punsubscribe"}
+		if !contains(allowedCommands, cmd) {
+			return encodeError(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", cmd))
+		}
+	}
+
 	if rdb.role == "master" && connState.multi && cmd != "multi" && cmd != "exec" && cmd != "discard" {
 		connState.cmdQueue = append(connState.cmdQueue, redisCommands{
 			cmd:  cmd,

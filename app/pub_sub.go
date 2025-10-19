@@ -34,5 +34,8 @@ func subscribe(ch string, rdb *redisDB, conn *net.Conn) int {
 		rdb.channels[*conn] = subscribedChannels
 	}
 
+	connState := rdb.getConnState((*conn).RemoteAddr().String())
+	connState.subMode = true
+	
 	return subscribedChannels.subCount
 }
