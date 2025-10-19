@@ -41,7 +41,6 @@ func encodeArray(elements []any) []byte {
 		}
 	}
 
-	debug("Encoded array: %s", result)
 	return []byte(result)
 }
 

@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -64,28 +63,6 @@ func parseReplicaConfig() (string, string) {
 		}
 	}
 	return "", ""
-}
-
-func createRedisDB() *redisDB {
-	return &redisDB{
-		data:     make(map[string]redisValue),
-		dataChan: make(chan struct{}, 10),
-		role:     "master",
-		replID:   DefaultReplicationID,
-		mux:      &sync.Mutex{},
-		buffer:   make([]string, 0),
-		replicas: make(map[string]net.Conn),
-		offset:   0,
-		ackCnt:   0,
-		ackChan:  make(chan struct{}, 10),
-		rdbFile:  rdbFile{data: make(map[string]redisValue)},
-		redisStream: redisStream{
-			data:      make(map[string][]redisStreamEntry),
-			streamIds: make(map[string]int),
-		},
-		connStates: make(map[string]*connectionState),
-		stateMux:   &sync.RWMutex{},
-	}
 }
 
 func loadRDBFileIfConfigured(rdb *redisDB) {

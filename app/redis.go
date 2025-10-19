@@ -35,6 +35,7 @@ type redisDB struct {
 	redisStream redisStream
 	connStates  map[string]*connectionState
 	stateMux    *sync.RWMutex
+	channels    []string
 }
 
 type connectionState struct {
@@ -72,6 +73,29 @@ type redisStreamEntry struct {
 type redisCommands struct {
 	cmd  string
 	args []string
+}
+
+func createRedisDB() *redisDB {
+	return &redisDB{
+		data:     make(map[string]redisValue),
+		dataChan: make(chan struct{}, 10),
+		role:     "master",
+		replID:   DefaultReplicationID,
+		mux:      &sync.Mutex{},
+		buffer:   make([]string, 0),
+		replicas: make(map[string]net.Conn),
+		offset:   0,
+		ackCnt:   0,
+		ackChan:  make(chan struct{}, 10),
+		rdbFile:  rdbFile{data: make(map[string]redisValue)},
+		redisStream: redisStream{
+			data:      make(map[string][]redisStreamEntry),
+			streamIds: make(map[string]int),
+		},
+		connStates: make(map[string]*connectionState),
+		stateMux:   &sync.RWMutex{},
+		channels:   make([]string, 0),
+	}
 }
 
 func (rdb *redisDB) setValue(key string, value any, valType string, createdAt int64, expiry int64) {
