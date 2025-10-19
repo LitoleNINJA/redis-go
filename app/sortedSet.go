@@ -97,11 +97,6 @@ func (set *sortedSet) size() int {
 	return len(set.members)
 }
 
-func (set *sortedSet) exists(member string) bool {
-	_, exists := set.members[member]
-	return exists
-}
-
 func (set *sortedSet) getScore(member string) (float64, bool) {
 	score, exists := set.members[member]
 	return score, exists

@@ -636,5 +636,5 @@ func handleZscoreCommand(args []string, rdb *redisDB) []byte {
 		return encodeNull()
 	}
 
-	return encodeBulkString(fmt.Sprintf("%f", score))
+	return encodeBulkString(strconv.FormatFloat(score, 'f', -1, 64))
 }
