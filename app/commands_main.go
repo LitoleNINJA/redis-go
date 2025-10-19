@@ -133,9 +133,9 @@ func handleInfoCommand(rdb *redisDB) []byte {
 
 func handleConfigCommand(args []string) []byte {
 	if strings.ToLower(args[0]) == "get" && args[1] == "dir" {
-		return encodeArray([]string{"dir", *dir})
+		return encodeArray([]any{"dir", *dir})
 	} else if strings.ToLower(args[0]) == "get" && args[1] == "dbfilename" {
-		return encodeArray([]string{"dbfilename", *dbFileName})
+		return encodeArray([]any{"dbfilename", *dbFileName})
 	}
 	return encodeError("unsupported CONFIG parameter")
 }
@@ -145,7 +145,11 @@ func handleKeysCommand(rdb *redisDB) []byte {
 	for k := range rdb.rdbFile.data {
 		keys = append(keys, k)
 	}
-	return encodeArray(keys)
+	anyKeys := make([]any, len(keys))
+	for i, k := range keys {
+		anyKeys[i] = k
+	}
+	return encodeArray(anyKeys)
 }
 
 func handleTypeCommand(args []string, rdb *redisDB) []byte {
@@ -387,7 +391,11 @@ func handleLrangeCommand(args []string, rdb *redisDB) []byte {
 		result = append(result, list[i])
 	}
 
-	return encodeArray(result)
+	anyResult := make([]any, len(result))
+	for i, v := range result {
+		anyResult[i] = v
+	}
+	return encodeArray(anyResult)
 }
 
 func handleLpushCommand(args []string, totalBytes int, rdb *redisDB) []byte {
@@ -470,7 +478,11 @@ func handleLPopCommand(args []string, totalBytes int, rdb *redisDB) []byte {
 
 		setKeyValue(key, list[popCount:], 0, totalBytes, rdb)
 
-		return encodeArray(removedValues)
+		anyRemovedValues := make([]any, len(removedValues))
+		for i, v := range removedValues {
+			anyRemovedValues[i] = v
+		}
+		return encodeArray(anyRemovedValues)
 	}
 }
 
@@ -603,7 +615,11 @@ func handleZrangeCommand(args []string, rdb *redisDB) []byte {
 		resp = append(resp, values[i])
 	}
 
-	return encodeArray(resp)
+	anyResp := make([]any, len(resp))
+	for i, v := range resp {
+		anyResp[i] = v
+	}
+	return encodeArray(anyResp)
 }
 
 func handleZcardCommand(args []string, rdb *redisDB) []byte {
@@ -619,7 +635,7 @@ func handleZcardCommand(args []string, rdb *redisDB) []byte {
 
 	ss := val.value.(*sortedSet)
 
-	return encodeInteger(int64(ss.size()))	
+	return encodeInteger(int64(ss.size()))
 }
 
 func handleZscoreCommand(args []string, rdb *redisDB) []byte {
@@ -670,5 +686,5 @@ func handleSubscribeCommand(args []string, rdb *redisDB) []byte {
 
 	count := subscribe(args[0])
 
-	return encodeArray([]string{"subscribe", args[0], string(encodeInteger(int64(count)))})
+	return encodeArray([]any{"subscribe", args[0], int64(count)})
 }

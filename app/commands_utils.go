@@ -24,11 +24,24 @@ func encodeInteger(i int64) []byte {
 	return []byte(fmt.Sprintf(":%d\r\n", i))
 }
 
-func encodeArray(elements []string) []byte {
+func encodeArray(elements []any) []byte {
 	result := fmt.Sprintf("*%d\r\n", len(elements))
 	for _, element := range elements {
-		result += fmt.Sprintf("$%d\r\n%s\r\n", len(element), element)
+		switch v := element.(type) {
+		case string:
+			result += fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)
+		case int:
+			result += fmt.Sprintf(":%d\r\n", v)
+		case int64:
+			result += fmt.Sprintf(":%d\r\n", v)
+		case []byte:
+			result += string(v)
+		default:
+			result += fmt.Sprintf("$%d\r\n%v\r\n", len(fmt.Sprintf("%v", v)), v)
+		}
 	}
+
+	debug("Encoded array: %s", result)
 	return []byte(result)
 }
 
@@ -242,7 +255,7 @@ func handleBlockPop(key string, timeStr string, rdb *redisDB) []byte {
 
 			elem := list[0]
 			rdb.setValue(key, list[1:], "list", time.Now().UnixMilli(), 0)
-			return encodeArray([]string{key, elem})
+			return encodeArray([]any{key, elem})
 		case <-ticker.C:
 			if timeout != 0 && time.Now().After(endTime) {
 				debug("Timeout reached, returning null\n")
