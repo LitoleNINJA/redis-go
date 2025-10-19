@@ -570,6 +570,16 @@ func handleZrangeCommand(args []string, rdb *redisDB) []byte {
 	start, _ := strconv.ParseInt(args[1], 10, 64)
 	end, _ := strconv.ParseInt(args[2], 10, 64)
 
+	if start < 0 {
+		start = int64(len(values)) + start
+	}
+	if end < 0 {
+		end = int64(len(values)) + end
+	}
+	if start < 0 {
+		start = 0
+	}
+
 	if start >= int64(ss.size()) {
 		return []byte("*0\r\n")
 	}
