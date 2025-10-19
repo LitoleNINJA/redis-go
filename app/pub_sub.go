@@ -36,6 +36,19 @@ func subscribe(ch string, rdb *redisDB, conn *net.Conn) int {
 
 	connState := rdb.getConnState((*conn).RemoteAddr().String())
 	connState.subMode = true
-	
+
 	return subscribedChannels.subCount
+}
+
+func publish(ch string, msg string, rdb *redisDB) int {
+	count := 0
+	for _, channelList := range rdb.channels {
+		for _, channel := range channelList.channels {
+			if channel == ch {
+				count++
+			}
+		}
+	}
+
+	return count
 }
