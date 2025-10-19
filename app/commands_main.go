@@ -76,6 +76,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleZrankCommand(args, rdb)
 	case "zrange":
 		response = handleZrangeCommand(args, rdb)
+	case "zcard":
+		response = handleZcardCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -596,4 +598,20 @@ func handleZrangeCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeArray(resp)
+}
+
+func handleZcardCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 1 {
+		return encodeError("wrong number of arguments for 'zcard' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return encodeInteger(0)
+	}
+
+	ss := val.value.(*sortedSet)
+
+	return encodeInteger(int64(ss.size()))
 }
