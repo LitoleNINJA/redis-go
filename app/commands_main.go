@@ -82,6 +82,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleZscoreCommand(args, rdb)
 	case "zrem":
 		response = handleZremCommand(args, rdb)
+	case "subscribe":
+		response = handleSubscribeCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -659,4 +661,18 @@ func handleZremCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeInteger(1)
+}
+
+func handleSubscribeCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 1 {
+		return encodeError("wrong number of arguments for 'subscribe' command")
+	}
+
+	resp := make([]string, 0)
+	count := subscribe(args[0])
+	resp = append(resp, "subscribe")
+	resp = append(resp, args[0])
+	resp = append(resp, strconv.Itoa(count))
+
+	return encodeArray(resp)
 }
