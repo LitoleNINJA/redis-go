@@ -30,7 +30,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	var response []byte
 	switch cmd {
 	case "ping":
-		response = handlePingCommand(rdb)
+		response = handlePingCommand(rdb, connState.subMode)
 	case "echo":
 		response = handleEchoCommand(args)
 	case "set":
@@ -99,7 +99,10 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	return response
 }
 
-func handlePingCommand(rdb *redisDB) []byte {
+func handlePingCommand(rdb *redisDB, subMode bool) []byte {
+	if subMode {
+		return encodeArray([]any{encodeBulkString("PONG"), encodeBulkString("")})
+	}
 	if rdb.role == "master" {
 		return encodeSimpleString("PONG")
 	}
