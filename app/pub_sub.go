@@ -1,9 +1,15 @@
 package main
 
-import "slices"
-
 func subscribe(ch string, rdb *redisDB) int {
-	if !slices.Contains(rdb.channels, ch) {
+	exists := false
+	for _, channel := range rdb.channels {
+		if channel == ch {
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
 		rdb.channels = append(rdb.channels, ch)
 	}
 
