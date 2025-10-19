@@ -101,3 +101,27 @@ func (set *sortedSet) getScore(member string) (float64, bool) {
 	score, exists := set.members[member]
 	return score, exists
 }
+
+func (set *sortedSet) remove(member string) bool {
+	_, exists := set.members[member]
+	if !exists {
+		return false
+	}
+
+	delete(set.members, member)
+
+	// rebuid ranks 
+	set.ranks = make([]sortedSetMember, 0, len(set.members))
+	for m, s := range set.members {
+		set.ranks = append(set.ranks, sortedSetMember{score: s, member: m})
+	}
+	// sort by score, then lexicographically
+	sort.Slice(set.ranks, func(i, j int) bool {
+		if set.ranks[i].score != set.ranks[j].score {
+			return set.ranks[i].score < set.ranks[j].score
+		}
+		return set.ranks[i].member < set.ranks[j].member
+	})
+
+	return true
+}

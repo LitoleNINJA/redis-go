@@ -80,6 +80,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleZcardCommand(args, rdb)
 	case "zscore":
 		response = handleZscoreCommand(args, rdb)
+	case "zrem":
+		response = handleZremCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -637,4 +639,24 @@ func handleZscoreCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeBulkString(strconv.FormatFloat(score, 'f', -1, 64))
+}
+
+func handleZremCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError("wrong number of arguments for 'zrem' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return encodeInteger(0)
+	}
+
+	ss := val.value.(*sortedSet)
+	found := ss.remove(args[1])
+	if !found {
+		return encodeInteger(0)
+	}
+
+	return encodeInteger(1)
 }
