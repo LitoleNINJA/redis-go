@@ -16,7 +16,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	if connState.subMode {
 		allowedCommands := []string{"ping", "subscribe", "unsubscribe", "psubscribe", "punsubscribe"}
 		if !contains(allowedCommands, cmd) {
-			return encodeError(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", cmd))
+			return encodeError(fmt.Sprintf("Can't execute '%s': only (P|S)UBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", cmd))
 		}
 	}
 
@@ -757,21 +757,25 @@ func handleGeoposCommnad(args []string, rdb *redisDB) []byte {
 	key := args[0]
 	val, exists := rdb.data[key]
 	if !exists {
-		return encodeArray([]any{})
+		resp := []any{}
+		for i := 0; i < len(args)-1; i++ {
+			resp = append(resp, []byte("*-1\r\n"))
+		}
+		return encodeArray(resp)
 	}
 
 	ss := val.value.(*sortedSet)
 
 	resp := []any{}
-	for i:=1; i<len(args); i++ {
+	for i := 1; i < len(args); i++ {
 		score, found := ss.getScore(args[i])
 		if !found {
-			resp = append(resp, encodeNull())
+			resp = append(resp, []byte("*-1\r\n"))
 			continue
 		}
-	
+
 		lat, lon := decodeGeoScore(score)
-		resp = append(resp, []any{fmt.Sprintf("%f", lon), fmt.Sprintf("%f", lat)})
+		resp = append(resp, encodeArray([]any{encodeBulkString(fmt.Sprintf("%f", lon)), encodeBulkString(fmt.Sprintf("%f", lat))}))
 	}
 
 	return encodeArray(resp)
