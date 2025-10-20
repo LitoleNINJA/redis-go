@@ -252,8 +252,8 @@ func convertGeoScore(lat, lon float64) string {
 	LATITUDE_RANGE := float64(MAX_LATITUDE - MIN_LATITUDE)
 	LONGITUDE_RANGE := float64(MAX_LONGITUDE - MIN_LONGITUDE)
 
-	normalized_latitude := math.Pow(2, 26) * (lat - MIN_LATITUDE)/LATITUDE_RANGE
-	normalized_longitude := math.Pow(2, 26) * (lon - MIN_LONGITUDE)/LONGITUDE_RANGE
+	normalized_latitude := math.Pow(2, 26) * (lat - MIN_LATITUDE) / LATITUDE_RANGE
+	normalized_longitude := math.Pow(2, 26) * (lon - MIN_LONGITUDE) / LONGITUDE_RANGE
 
 	normalized_latitude_int := int64(normalized_latitude)
 	normalized_longitude_int := int64(normalized_longitude)
@@ -271,7 +271,7 @@ func interleave(lat, lon int64) int64 {
 
 	// The lon value is then shifted 1 bit to the left
 	lon_shifted := lon << 1
-	
+
 	// Next, lat and lon_shifted are combined using a bitwise OR
 	return lat | lon_shifted
 }
@@ -282,11 +282,50 @@ func spread_int32_to_int64(num int64) int64 {
 	num = num & 0xFFFFFFFF
 
 	// Bitwise operations to spread 32 bits into 64 bits with zeros in-between
-    num = (num | (num << 16)) & 0x0000FFFF0000FFFF
-    num = (num | (num << 8))  & 0x00FF00FF00FF00FF
-    num = (num | (num << 4))  & 0x0F0F0F0F0F0F0F0F
-    num = (num | (num << 2))  & 0x3333333333333333
-    num = (num | (num << 1))  & 0x5555555555555555
+	num = (num | (num << 16)) & 0x0000FFFF0000FFFF
+	num = (num | (num << 8)) & 0x00FF00FF00FF00FF
+	num = (num | (num << 4)) & 0x0F0F0F0F0F0F0F0F
+	num = (num | (num << 2)) & 0x3333333333333333
+	num = (num | (num << 1)) & 0x5555555555555555
 
 	return num
+}
+
+func decodeGeoScore(score float64) (float64, float64) {
+	scoreInt := int64(score)
+
+	lon := scoreInt >> 1
+	lat := scoreInt
+
+	// Compact both latitude and longitude back to 32-bit integers
+	grid_latitude_number := compact_int64_to_int32(lat)
+	grid_longitude_number := compact_int64_to_int32(lon)
+
+	LATITUDE_RANGE := float64(MAX_LATITUDE - MIN_LATITUDE)
+	LONGITUDE_RANGE := float64(MAX_LONGITUDE - MIN_LONGITUDE)
+
+	// Calculate the grid boundaries
+	grid_latitude_min := MIN_LATITUDE + LATITUDE_RANGE * (float64(grid_latitude_number) / (math.Pow(2, 26)))
+	grid_latitude_max := MIN_LATITUDE + LATITUDE_RANGE * (float64(grid_latitude_number + 1) / (math.Pow(2, 26)))
+	grid_longitude_min := MIN_LONGITUDE + LONGITUDE_RANGE * (float64(grid_longitude_number) / (math.Pow(2, 26)))
+	grid_longitude_max := MIN_LONGITUDE + LONGITUDE_RANGE * (float64(grid_longitude_number + 1) / (math.Pow(2, 26)))
+    
+    // Calculate the center point of the grid cell
+    latitude := (grid_latitude_min + grid_latitude_max) / 2
+    longitude := (grid_longitude_min + grid_longitude_max) / 2
+    return latitude, longitude
+}
+
+func compact_int64_to_int32(v int64) int64 {
+	// Keep only the bits in even positions
+    v = v & 0x5555555555555555
+
+    // Reverse the spreading process by shifting and masking
+    v = (v | (v >> 1)) & 0x3333333333333333
+    v = (v | (v >> 2)) & 0x0F0F0F0F0F0F0F0F
+    v = (v | (v >> 4)) & 0x00FF00FF00FF00FF
+    v = (v | (v >> 8)) & 0x0000FFFF0000FFFF
+    v = (v | (v >> 16)) & 0x00000000FFFFFFFF
+    
+    return v
 }

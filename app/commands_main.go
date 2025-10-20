@@ -98,6 +98,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleUnsubCommand(args, rdb, &conn)
 	case "geoadd":
 		response = handleGeoaddCommand(args, rdb, totalBytes)
+	case "geopos":
+		response = handleGeoposCommnad(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -745,4 +747,26 @@ func handleGeoaddCommand(args []string, rdb *redisDB, totalBytes int) []byte {
 	handleZaddCommand([]string{key, score, location}, totalBytes, rdb)
 
 	return encodeInteger(1)
+}
+
+func handleGeoposCommnad(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError("wrong number of arguments for 'geopos' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return encodeArray([]any{})
+	}
+
+	ss := val.value.(*sortedSet)
+	score, found := ss.getScore(args[1])
+	if !found {
+		return encodeArray([]any{})
+	}
+
+	lat, lon := decodeGeoScore(score)
+
+	return encodeArray([]any{fmt.Sprintf("%f", lon), fmt.Sprintf("%f", lat)})
 }
