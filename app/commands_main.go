@@ -103,7 +103,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 
 func handlePingCommand(rdb *redisDB, subMode bool) []byte {
 	if subMode {
-		return encodeArray([]any{encodeBulkString("PONG"), encodeBulkString("")})
+		return encodeArray([]any{encodeBulkString("p"), encodeBulkString("")})
 	}
 	if rdb.role == "master" {
 		return encodeSimpleString("PONG")
