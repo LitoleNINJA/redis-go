@@ -766,7 +766,8 @@ func handleGeoposCommnad(args []string, rdb *redisDB) []byte {
 	for i:=1; i<len(args); i++ {
 		score, found := ss.getScore(args[i])
 		if !found {
-			resp = append(resp, encodeArray([]any{}))
+			// resp = append(resp, encodeArray([]any{}))
+			continue
 		}
 	
 		lat, lon := decodeGeoScore(score)
