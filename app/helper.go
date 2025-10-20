@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -41,6 +42,10 @@ const (
 	RDBAux           = 250
 	RDBResizeDB      = 251
 	RDBBufferSize    = 4096
+	MIN_LATITUDE     = -85.05112878
+	MAX_LATITUDE     = 85.05112878
+	MIN_LONGITUDE    = -180
+	MAX_LONGITUDE    = 180
 )
 
 func printCommand(res []byte) string {
@@ -241,4 +246,47 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+func convertGeoScore(lat, lon float64) string {
+	LATITUDE_RANGE := float64(MAX_LATITUDE - MIN_LATITUDE)
+	LONGITUDE_RANGE := float64(MAX_LONGITUDE - MIN_LONGITUDE)
+
+	normalized_latitude := math.Pow(2, 26) * (lat - MIN_LATITUDE)/LATITUDE_RANGE
+	normalized_longitude := math.Pow(2, 26) * (lon - MIN_LONGITUDE)/LONGITUDE_RANGE
+
+	normalized_latitude_int := int64(normalized_latitude)
+	normalized_longitude_int := int64(normalized_longitude)
+
+	score := interleave(normalized_latitude_int, normalized_longitude_int)
+	debug("Geo score for lat %f, lon %f: %d\n", lat, lon, score)
+
+	return fmt.Sprintf("%d", score)
+}
+
+// Interleaves the bits of two 32-bit integers (lat and lon) into a single 64-bit integer.
+func interleave(lat, lon int64) int64 {
+	lat = spread_int32_to_int64(lat)
+	lon = spread_int32_to_int64(lon)
+
+	// The lon value is then shifted 1 bit to the left
+	lon_shifted := lon << 1
+	
+	// Next, lat and lon_shifted are combined using a bitwise OR
+	return lat | lon_shifted
+}
+
+// Spreads a 32-bit integer to a 64-bit integer by inserting 32 zero bits in-between.
+func spread_int32_to_int64(num int64) int64 {
+	// Ensure only lower 32 bits are non-zero.
+	num = num & 0xFFFFFFFF
+
+	// Bitwise operations to spread 32 bits into 64 bits with zeros in-between
+    num = (num | (num << 16)) & 0x0000FFFF0000FFFF
+    num = (num | (num << 8))  & 0x00FF00FF00FF00FF
+    num = (num | (num << 4))  & 0x0F0F0F0F0F0F0F0F
+    num = (num | (num << 2))  & 0x3333333333333333
+    num = (num | (num << 1))  & 0x5555555555555555
+
+	return num
 }
