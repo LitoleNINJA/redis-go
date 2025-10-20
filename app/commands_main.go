@@ -12,6 +12,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	connAddr := conn.RemoteAddr().String()
 	connState := rdb.getConnState(connAddr)
 
+	// check if in subs mode, only allow certain commands
 	if connState.subMode {
 		allowedCommands := []string{"ping", "subscribe", "unsubscribe", "psubscribe", "punsubscribe"}
 		if !contains(allowedCommands, cmd) {
@@ -95,6 +96,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handlePublishCommand(args, rdb)
 	case "unsubscribe":
 		response = handleUnsubCommand(args, rdb, &conn)
+	case "geoadd":
+		response = handleGeoaddCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -721,4 +724,12 @@ func handleUnsubCommand(args []string, rdb *redisDB, conn *net.Conn) []byte {
 	count := unsubscribe(args[0], rdb, conn)
 
 	return encodeArray([]any{"unsubscribe", args[0], int64(count)})
+}
+
+func handleGeoaddCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 4 {
+		return encodeError("wrong number of arguments for 'geoadd' command")
+	}
+
+	return encodeInteger(1)
 }
