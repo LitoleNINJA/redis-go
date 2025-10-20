@@ -93,7 +93,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleSubscribeCommand(args, rdb, &conn)
 	case "publish":
 		response = handlePublishCommand(args, rdb)
-	
+	case "unsubsctibe":
+		response = handleUnsubCommand(args, rdb, &conn)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -710,4 +711,14 @@ func handlePublishCommand(args []string, rdb *redisDB) []byte {
 	count := publish(args[0], args[1], rdb)
 
 	return encodeInteger(int64(count))
+}
+
+func handleUnsubCommand(args []string, rdb *redisDB, conn *net.Conn) []byte {
+	if len(args) < 1 {
+		return encodeError("wrong number of arguments for 'unsubscribe' command")
+	}
+
+	count := unsubscribe(args[0], rdb, conn)
+
+	return encodeArray([]any{"unsubscribe", args[0], int64(count)})
 }
