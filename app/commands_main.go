@@ -97,7 +97,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	case "unsubscribe":
 		response = handleUnsubCommand(args, rdb, &conn)
 	case "geoadd":
-		response = handleGeoaddCommand(args, rdb)
+		response = handleGeoaddCommand(args, rdb, totalBytes)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -726,17 +726,22 @@ func handleUnsubCommand(args []string, rdb *redisDB, conn *net.Conn) []byte {
 	return encodeArray([]any{"unsubscribe", args[0], int64(count)})
 }
 
-func handleGeoaddCommand(args []string, rdb *redisDB) []byte {
+func handleGeoaddCommand(args []string, rdb *redisDB, totalBytes int) []byte {
 	if len(args) < 4 {
 		return encodeError("wrong number of arguments for 'geoadd' command")
 	}
 
 	lat, _ := strconv.ParseFloat(args[1], 64)
 	lon, _ := strconv.ParseFloat(args[2], 64)
-
+	
 	if lat > 180 || lat < -180 || lon < -85.05112878 || lon > +85.05112878 {
 		return encodeError(fmt.Sprintf("invalid longitude,latitude pair (%f,%f)", lon, lat))
-	} 
-
+		} 
+		
+	key := args[0]
+	location := args[3]
+	
+	handleZaddCommand([]string{key, "0", location}, totalBytes, rdb)
+	
 	return encodeInteger(1)
 }
