@@ -761,12 +761,17 @@ func handleGeoposCommnad(args []string, rdb *redisDB) []byte {
 	}
 
 	ss := val.value.(*sortedSet)
-	score, found := ss.getScore(args[1])
-	if !found {
-		return encodeArray([]any{})
+
+	resp := []any{}
+	for i:=1; i<len(args); i++ {
+		score, found := ss.getScore(args[i])
+		if !found {
+			return encodeArray([]any{})
+		}
+	
+		lat, lon := decodeGeoScore(score)
+		resp = append(resp, []any{fmt.Sprintf("%f", lon), fmt.Sprintf("%f", lat)})
 	}
 
-	lat, lon := decodeGeoScore(score)
-
-	return encodeArray([]any{fmt.Sprintf("%f", lon), fmt.Sprintf("%f", lat)})
+	return encodeArray(resp)
 }
