@@ -731,5 +731,12 @@ func handleGeoaddCommand(args []string, rdb *redisDB) []byte {
 		return encodeError("wrong number of arguments for 'geoadd' command")
 	}
 
+	lat, _ := strconv.ParseFloat(args[1], 64)
+	lon, _ := strconv.ParseFloat(args[2], 64)
+
+	if lat > 180 || lat < -180 || lon < -85.05112878 || lon > +85.05112878 {
+		return encodeError(fmt.Sprintf("invalid longitude,latitude pair (%f,%f)", lon, lat))
+	} 
+
 	return encodeInteger(1)
 }
