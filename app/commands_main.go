@@ -731,18 +731,18 @@ func handleGeoaddCommand(args []string, rdb *redisDB, totalBytes int) []byte {
 		return encodeError("wrong number of arguments for 'geoadd' command")
 	}
 
-	lat, _ := strconv.ParseFloat(args[1], 64)
-	lon, _ := strconv.ParseFloat(args[2], 64)
-	
+	lon, _ := strconv.ParseFloat(args[1], 64)
+	lat, _ := strconv.ParseFloat(args[2], 64)
+
 	if lat > MAX_LATITUDE || lat < MIN_LATITUDE || lon < MIN_LONGITUDE || lon > MAX_LONGITUDE {
 		return encodeError(fmt.Sprintf("invalid longitude,latitude pair (%f,%f)", lon, lat))
-		} 
-		
+	}
+
 	key := args[0]
 	location := args[3]
 	score := convertGeoScore(lat, lon)
-	
+
 	handleZaddCommand([]string{key, score, location}, totalBytes, rdb)
-	
+
 	return encodeInteger(1)
 }

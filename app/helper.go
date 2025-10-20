@@ -44,8 +44,8 @@ const (
 	RDBBufferSize    = 4096
 	MIN_LATITUDE     = -85.05112878
 	MAX_LATITUDE     = 85.05112878
-	MIN_LONGITUDE    = -180
-	MAX_LONGITUDE    = 180
+	MIN_LONGITUDE    = -180.0
+	MAX_LONGITUDE    = 180.0
 )
 
 func printCommand(res []byte) string {
