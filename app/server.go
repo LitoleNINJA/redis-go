@@ -108,7 +108,22 @@ func acceptConnections(listener net.Listener, rdb *redisDB) {
 
 func handleConnection(conn net.Conn, rdb *redisDB) {
 	defer func() {
+		// Clean up connection state
 		rdb.removeConnState(conn.RemoteAddr().String())
+
+		// Clean up pub/sub channels if subscribed
+		rdb.mux.Lock()
+		if channelList, exists := rdb.channels[conn]; exists {
+			// Signal the listener to stop
+			select {
+			case channelList.done <- true:
+			default:
+			}
+			// Remove from map
+			delete(rdb.channels, conn)
+		}
+		rdb.mux.Unlock()
+
 		conn.Close()
 	}()
 
@@ -116,7 +131,7 @@ func handleConnection(conn net.Conn, rdb *redisDB) {
 		buf := make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("Error reading from connection: ", err.Error())
+			debug("Connection closed: %s\n", err.Error())
 			return
 		}
 		fmt.Printf("\nReceived: %s\n From: %s\n", printCommand(buf[:n]), conn.RemoteAddr())
@@ -166,6 +181,12 @@ func (rdb *redisDB) getConnState(addr string) *connectionState {
 	}
 
 	return state
+}
+
+func (rdb *redisDB) setConnState(addr string, connState connectionState) {
+	rdb.stateMux.Lock()
+	rdb.connStates[addr] = &connState
+	rdb.stateMux.Unlock()
 }
 
 func (rdb *redisDB) removeConnState(addr string) {

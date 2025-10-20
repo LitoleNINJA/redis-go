@@ -19,6 +19,7 @@ Redis Commands
 *4\r\n$4\r\nZADD\r\n$6\r\norange\r\n$5\r\n4.6179\r\n$4\r\nbear\r\n                  ZADD orange 2.6179 pear
 *4\r\n$6\r\nZRANGE\r\n$6\r\norange\r\n$1\r\n0\r\n$1\r\n1\r\n                        ZRANGE orange 0 1
 *2\r\n$9\r\nSUBSCRIBE\r\n$9\r\nblueberry\r\n                                        SUBSCRIBE blueberry
+*3\r\n$11\r\nPUBLISH\r\n$9\r\nblueberry\r\n$5\r\nhello\r\n                          PUBLISH blueberry hello
 
 
 *3\r\n$3\r\nset\r\n$3\r\nfoo\r\n$3\r\n123\r\n*3\r\n$3\r\nset\r\n$3\r\nbar\r\n$3\r\n456\r\n*3\r\n$3\r\nset\r\n$3\r\nbaz\r\n$3\r\n789\r\n

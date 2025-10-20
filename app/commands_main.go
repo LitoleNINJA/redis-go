@@ -93,6 +93,7 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleSubscribeCommand(args, rdb, &conn)
 	case "publish":
 		response = handlePublishCommand(args, rdb)
+	
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}

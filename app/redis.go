@@ -35,7 +35,7 @@ type redisDB struct {
 	redisStream redisStream
 	connStates  map[string]*connectionState
 	stateMux    *sync.RWMutex
-	channels    map[net.Conn]ChannelList
+	channels    map[net.Conn]*ChannelList
 }
 
 type connectionState struct {
@@ -95,7 +95,7 @@ func createRedisDB() *redisDB {
 		},
 		connStates: make(map[string]*connectionState),
 		stateMux:   &sync.RWMutex{},
-		channels:   make(map[net.Conn]ChannelList),
+		channels:   make(map[net.Conn]*ChannelList),
 	}
 }
 
