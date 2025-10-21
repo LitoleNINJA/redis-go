@@ -102,6 +102,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleGeoposCommnad(args, rdb)
 	case "geodist":
 		response = handleGeodistCommand(args, rdb)
+	case "geosearch":
+		response = handleGeosearchCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -807,4 +809,40 @@ func handleGeodistCommand(args []string, rdb *redisDB) []byte {
 	dist := geohashGetDistance(lon1, lat1, lon2, lat2)
 
 	return encodeBulkString(fmt.Sprintf("%f", dist))
+}
+
+func handleGeosearchCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 7 || args[1] != "FROMLONLAT" || args[4] != "BYRADIUS" {
+		return encodeError("wrong number of arguments for 'geosearch' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return []byte("*0\r\n")
+	}
+
+	ss := val.value.(*sortedSet)
+	x, _ := strconv.ParseFloat(args[2], 64)
+	y, _ := strconv.ParseFloat(args[3], 64)
+
+	// for each place in ss
+	results := make([]string, 0)
+	for k, _ := range ss.members {
+		score, _ := ss.getScore(k)
+		lat, lon := decodeGeoScore(score)
+		dist := geohashGetDistance(x, y, lon, lat)
+
+		radius, _ := strconv.ParseFloat(args[5], 64)
+		if dist <= radius {
+			results = append(results, k)
+		}
+	}
+
+	anyResults := make([]any, len(results))
+	for i, v := range results {
+		anyResults[i] = v
+	}
+
+	return encodeArray(anyResults)
 }
