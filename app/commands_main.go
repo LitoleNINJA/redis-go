@@ -100,6 +100,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleGeoaddCommand(args, rdb, totalBytes)
 	case "geopos":
 		response = handleGeoposCommnad(args, rdb)
+	case "geodist":
+		response = handleGeodistCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -779,4 +781,30 @@ func handleGeoposCommnad(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeArray(resp)
+}
+
+func handleGeodistCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 3 {
+		return encodeError("wrong number of arguments for 'geodist' command")
+	}
+
+	key := args[0]
+	val, exists := rdb.data[key]
+	if !exists {
+		return encodeNull()
+	}
+
+	ss := val.value.(*sortedSet)
+	score1, found1 := ss.getScore(args[1])
+	score2, found2 := ss.getScore(args[2])
+	if !found1 || !found2 {
+		return encodeNull()
+	}
+
+	lat1, lon1 := decodeGeoScore(score1)
+	lat2, lon2 := decodeGeoScore(score2)
+
+	dist := geohashGetDistance(lon1, lat1, lon2, lat2)
+
+	return encodeBulkString(fmt.Sprintf("%f", dist))
 }

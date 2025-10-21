@@ -329,3 +329,25 @@ func compact_int64_to_int32(v int64) int64 {
     
     return v
 }
+
+// Calculate distance using haversine great circle distance formula
+func geohashGetDistance(lon1, lat1, lon2, lat2 float64) float64 {
+	EARTH_RADIUS_IN_METERS := 6372797.560856;
+
+    lon1r := lon1 * math.Pi / 180
+    lon2r := lon2 * math.Pi / 180
+    v := math.Sin((lon2r - lon1r) / 2);
+
+    // if v == 0 we can avoid doing expensive math when lons are practically the same
+    if (v == 0.0) {
+        return EARTH_RADIUS_IN_METERS * math.Abs(lat2 * math.Pi / 180 - lat1 * math.Pi / 180)
+	}
+
+    lat1r := lat1 * math.Pi / 180
+    lat2r := lat2 * math.Pi / 180
+
+    u := math.Sin((lat2r - lat1r) / 2)
+    a := u * u + math.Cos(lat1r) * math.Cos(lat2r) * v * v
+
+    return 2.0 * EARTH_RADIUS_IN_METERS * math.Asin(math.Sqrt(a))
+}
