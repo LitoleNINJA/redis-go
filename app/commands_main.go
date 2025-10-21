@@ -828,7 +828,7 @@ func handleGeosearchCommand(args []string, rdb *redisDB) []byte {
 
 	// for each place in ss
 	results := make([]string, 0)
-	for k, _ := range ss.members {
+	for k := range ss.members {
 		score, _ := ss.getScore(k)
 		lat, lon := decodeGeoScore(score)
 		dist := geohashGetDistance(x, y, lon, lat)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -140,7 +141,7 @@ func startReplication(masterIP, masterPort string, rdb *redisDB) {
 // Replication-related functions
 func handleReplConfCommand(args []string, rdb *redisDB) []byte {
 	if rdb.role == "master" {
-		if args[0] == "ack" {
+		if strings.ToLower(args[0]) == "ack" {
 			fmt.Println("Received ACK from slave")
 			rdb.incrementACK()
 			fmt.Println("Ack count: ", rdb.getAckCnt())
