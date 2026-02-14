@@ -41,6 +41,12 @@ func setPasswordForUser(user string, password string, rdb *redisDB) {
 	if !ok {
 		return 
 	}	
+
+	if len(password) == 0 || password[0] != '>' {
+		return
+	}
+
+	password = password[1:]
 	
 	hashedPassword := sha256hash(password)
 	val.password = hashedPassword
