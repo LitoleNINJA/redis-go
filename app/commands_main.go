@@ -853,6 +853,13 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 	switch args[0] {
 	case "WHOAMI":
 		return encodeBulkString("default")
+	case "GETUSER":
+		if len(args) < 2 {
+			return encodeError(("wrong number of arguments for 'GETUSER' command"))
+		}
+
+		// user := args[1]
+		return encodeArray([]any{encodeBulkString("flags"), encodeArray([]any{})})
 	default:
 		return encodeError(fmt.Sprintf("Unknown args: '%s' after ACL", args[0]))
 	}
