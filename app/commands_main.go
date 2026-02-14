@@ -859,7 +859,7 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 		}
 
 		// user := args[1]
-		return encodeArray([]any{encodeBulkString("flags"), encodeArray([]any{})})
+		return encodeArray([]any{encodeBulkString("flags"), encodeArray([]any{encodeBulkString("nopass")})})
 	default:
 		return encodeError(fmt.Sprintf("Unknown args: '%s' after ACL", args[0]))
 	}
