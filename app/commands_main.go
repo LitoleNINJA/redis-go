@@ -104,6 +104,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleGeodistCommand(args, rdb)
 	case "geosearch":
 		response = handleGeosearchCommand(args, rdb)
+	case "acl":
+		response = handleAclCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -123,7 +125,7 @@ func handlePingCommand(rdb *redisDB, subMode bool) []byte {
 }
 
 func handleEchoCommand(args []string) []byte {
-	return encodeSimpleString(args[0])
+	return encodeBulkString(args[0])
 }
 
 func handleSetCommand(args []string, totalBytes int, rdb *redisDB) []byte {
@@ -845,4 +847,13 @@ func handleGeosearchCommand(args []string, rdb *redisDB) []byte {
 	}
 
 	return encodeArray(anyResults)
+}
+
+func handleAclCommand(args []string, rdb *redisDB) []byte {
+	switch args[0] {
+	case "WHOAMI":
+		return encodeBulkString("default")
+	default:
+		return encodeError(fmt.Sprintf("Unknown args: '%s' after ACL", args[0]))
+	}
 }
