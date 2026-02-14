@@ -110,9 +110,9 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	case "geosearch":
 		response = handleGeosearchCommand(args, rdb)
 	case "acl":
-		response = handleAclCommand(args, rdb)
+		response = handleAclCommand(args)
 	case "auth":
-		response = handleAuthCommand(args, rdb)
+		response = handleAuthCommand(args)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
