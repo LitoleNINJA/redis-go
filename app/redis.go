@@ -36,13 +36,13 @@ type redisDB struct {
 	connStates  map[string]*connectionState
 	stateMux    *sync.RWMutex
 	channels    map[net.Conn]*ChannelList
-	auth        map[string]AuthValues
 }
 
 type connectionState struct {
 	multi    bool
 	cmdQueue []redisCommands
 	subMode  bool
+	isAuth   bool
 }
 
 type redisValue struct {
@@ -97,9 +97,6 @@ func createRedisDB() *redisDB {
 		connStates: make(map[string]*connectionState),
 		stateMux:   &sync.RWMutex{},
 		channels:   make(map[net.Conn]*ChannelList),
-		auth: map[string]AuthValues{
-			"default": {noPass: true},
-		},
 	}
 }
 

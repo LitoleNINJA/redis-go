@@ -12,6 +12,11 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 	connAddr := conn.RemoteAddr().String()
 	connState := rdb.getConnState(connAddr)
 
+	// check if user is Authenticated
+	if !connState.isAuth {
+		return []byte("-NOAUTH Authentication required.\r\n")
+	}
+
 	// check if in subs mode, only allow certain commands
 	if connState.subMode {
 		allowedCommands := []string{"ping", "subscribe", "unsubscribe", "psubscribe", "punsubscribe"}
@@ -851,7 +856,7 @@ func handleGeosearchCommand(args []string, rdb *redisDB) []byte {
 	return encodeArray(anyResults)
 }
 
-func handleAclCommand(args []string, rdb *redisDB) []byte {
+func handleAclCommand(args []string) []byte {
 	switch args[0] {
 	case "WHOAMI":
 		return encodeBulkString("default")
@@ -862,8 +867,8 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 		}
 
 		user := args[1]
-		flags := getFlagsForUser(user, rdb)
-		passwords := getPasswordsForUser(user, rdb)
+		flags := auth.getFlagsForUser(user)
+		passwords := auth.getPasswordsForUser(user)
 		return encodeArray([]any{encodeBulkString("flags"), encodeArray(flags), encodeBulkString("passwords"), encodeArray(passwords)})
 
 	case "SETUSER":
@@ -872,7 +877,7 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 		}
 
 		user := args[1]
-		setPasswordForUser(user, args[2], rdb)
+		auth.setPasswordForUser(user, args[2])
 
 		return encodeSimpleString("OK")
 	default:
@@ -880,14 +885,14 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 	}
 }
 
-func handleAuthCommand(args []string, rdb *redisDB) []byte {
+func handleAuthCommand(args []string) []byte {
 	if len(args) < 2 {
 		return encodeError(("wrong number of arguments for 'AUTH' command"))
 	}
 
 	user, pass := args[0], args[1]
 	
-	if authenticateUser(user, pass, rdb) {
+	if auth.authenticateUser(user, pass) {
 		return encodeSimpleString("OK")
 	}
 

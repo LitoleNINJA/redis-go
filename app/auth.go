@@ -5,13 +5,21 @@ import (
 	"fmt"
 )
 
+type Auth map[string]AuthValues
+
 type AuthValues struct {
 	noPass   bool
 	password string
 }
 
-func getFlagsForUser(user string, rdb *redisDB) []any {
-	val, ok := rdb.auth[user]; 
+func createAuth() Auth {
+	return Auth{
+		"default": {noPass: true},
+	}
+}
+
+func (auth Auth) getFlagsForUser(user string) []any {
+	val, ok := auth[user]; 
 	if !ok {
 		return []any{}
 	}	
@@ -23,8 +31,8 @@ func getFlagsForUser(user string, rdb *redisDB) []any {
 	return flags
 }
 
-func getPasswordsForUser(user string, rdb *redisDB) []any {
-	val, ok := rdb.auth[user]; 
+func (auth Auth) getPasswordsForUser(user string) []any {
+	val, ok := auth[user]; 
 	if !ok {
 		return []any{}
 	}	
@@ -36,8 +44,8 @@ func getPasswordsForUser(user string, rdb *redisDB) []any {
 	return pass
 }
 
-func setPasswordForUser(user string, password string, rdb *redisDB) {
-	val, ok := rdb.auth[user]; 
+func (auth Auth) setPasswordForUser(user string, password string) {
+	val, ok := auth[user]; 
 	if !ok {
 		return 
 	}	
@@ -52,11 +60,11 @@ func setPasswordForUser(user string, password string, rdb *redisDB) {
 	val.password = hashedPassword
 	val.noPass = false
 
-	rdb.auth[user] = val
+	auth[user] = val
 }
 
-func authenticateUser(user string, pass string, rdb *redisDB) bool {
-	val, ok := rdb.auth[user]; 
+func (auth Auth) authenticateUser(user string, pass string) bool {
+	val, ok := auth[user]
 	if !ok {
 		return false
 	}
@@ -69,6 +77,15 @@ func authenticateUser(user string, pass string, rdb *redisDB) bool {
 	storedPass := val.password
 
 	return hasedPass == storedPass
+}
+
+func (auth Auth) isNoPass(user string) bool {
+	val, ok := auth[user]
+	if !ok {
+		return false
+	}
+
+	return val.noPass
 }
 
 func sha256hash(password string) string {

@@ -31,6 +31,8 @@ var (
 	lastStreamID      = ""
 )
 
+var auth = createAuth()
+
 func main() {
 	flag.Parse()
 
@@ -170,11 +172,16 @@ func (rdb *redisDB) getConnState(addr string) *connectionState {
 	rdb.stateMux.RUnlock()
 
 	if !exists {
+		isAuth := true
+		if !auth.isNoPass("default") {
+			isAuth = false
+		}
 		rdb.stateMux.Lock()
 		state = &connectionState{
 			multi:    false,
 			cmdQueue: make([]redisCommands, 0),
 			subMode:  false,
+			isAuth:   isAuth,
 		}
 		rdb.connStates[addr] = state
 		rdb.stateMux.Unlock()
