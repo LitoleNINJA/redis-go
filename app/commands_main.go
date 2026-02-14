@@ -106,6 +106,8 @@ func handleCommand(cmd string, args []string, conn net.Conn, totalBytes int, rdb
 		response = handleGeosearchCommand(args, rdb)
 	case "acl":
 		response = handleAclCommand(args, rdb)
+	case "auth":
+		response = handleAuthCommand(args, rdb)
 	default:
 		response = handleUnknownCommand(cmd, rdb)
 	}
@@ -876,4 +878,17 @@ func handleAclCommand(args []string, rdb *redisDB) []byte {
 	default:
 		return encodeError(fmt.Sprintf("Unknown args: '%s' after ACL", args[0]))
 	}
+}
+
+func handleAuthCommand(args []string, rdb *redisDB) []byte {
+	if len(args) < 2 {
+		return encodeError(("wrong number of arguments for 'AUTH' command"))
+	}
+
+	user, pass := args[0], args[1]
+	
+	if authenticateUser(user, pass, rdb) {
+		return encodeSimpleString("OK")
+	}
+	return encodeError("WRONGPASS invalid username-password pair or user is disabled.")
 }

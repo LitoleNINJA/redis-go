@@ -55,6 +55,22 @@ func setPasswordForUser(user string, password string, rdb *redisDB) {
 	rdb.auth[user] = val
 }
 
+func authenticateUser(user string, pass string, rdb *redisDB) bool {
+	val, ok := rdb.auth[user]; 
+	if !ok {
+		return false
+	}
+
+	if val.noPass {
+		return true
+	}
+
+	hasedPass := sha256hash(pass)
+	storedPass := val.password
+
+	return hasedPass == storedPass
+}
+
 func sha256hash(password string) string {
 	hash := sha256.Sum256([]byte(password))
 	return fmt.Sprintf("%x", hash)
