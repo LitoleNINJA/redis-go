@@ -891,5 +891,5 @@ func handleAuthCommand(args []string, rdb *redisDB) []byte {
 		return encodeSimpleString("OK")
 	}
 
-	return []byte("-WRONGPASS invalid username-password pair or user is disabled.")
+	return []byte("-WRONGPASS invalid username-password pair or user is disabled.\r\n")
 }
